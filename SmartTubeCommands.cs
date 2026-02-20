@@ -169,12 +169,17 @@ namespace LogiK3D.Piping
                         selectedPolyId = per.ObjectId;
                         polyEnt = (Entity)tr.GetObject(selectedPolyId, OpenMode.ForWrite);
                         
-                        // Récupérer le numéro de ligne de la polyligne
+                        // Récupérer le numéro de ligne et le DN de base de la polyligne
                         ResultBuffer rb = polyEnt.GetXDataForApplication(PipeManager.LineDataAppName);
                         if (rb != null)
                         {
                             TypedValue[] values = rb.AsArray();
                             if (values.Length >= 2) lineNumber = values[1].Value.ToString();
+                            if (values.Length >= 4)
+                            {
+                                currentDN = values[2].Value.ToString();
+                                currentOD = (double)values[3].Value;
+                            }
                         }
 
                         PromptPointOptions ppo = new PromptPointOptions($"\nSpécifiez le point d'insertion sur la ligne pour {compType} {currentDN} : ");
@@ -582,9 +587,28 @@ namespace LogiK3D.Piping
                         {
                             try
                             {
+                                // Récupérer le DN de base de la ligne pour la mise à jour
+                                string baseDN = currentDN;
+                                double baseOD = currentOD;
+                                double baseThickness = currentThickness;
+                                ResultBuffer rb = pipeCurve.GetXDataForApplication(PipeManager.LineDataAppName);
+                                if (rb != null)
+                                {
+                                    TypedValue[] values = rb.AsArray();
+                                    if (values.Length >= 4)
+                                    {
+                                        baseDN = values[2].Value.ToString();
+                                        baseOD = (double)values[3].Value;
+                                    }
+                                    if (values.Length >= 5)
+                                    {
+                                        baseThickness = (double)values[4].Value;
+                                    }
+                                }
+
                                 PipeManager.DeleteLinkedSolids(pipeCurve, tr);
-                                PipeManager.UpdateLineComponents(pipeCurve, lineNumber, currentDN, tr);
-                                PipeManager.GeneratePiping(pipeCurve, lineNumber, currentDN, currentOD, currentThickness, tr);
+                                PipeManager.UpdateLineComponents(pipeCurve, lineNumber, baseDN, tr);
+                                PipeManager.GeneratePiping(pipeCurve, lineNumber, baseDN, baseOD, baseThickness, tr);
                                 ed.WriteMessage($"\nTuyauterie mise à jour.");
                             }
                             catch (System.Exception ex)
