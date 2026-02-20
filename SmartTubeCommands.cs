@@ -12,9 +12,6 @@ namespace LogiK3D.Piping
     {
         // Constantes de configuration
         private const string AppName = "LogiK_Data";
-        private const double PipeOuterDiameter = 114.3; // DN100
-        private const double PipeRadius = PipeOuterDiameter / 2.0;
-        private const double ElbowRadiusLR = 1.5 * 100.0; // Rayon standard 1.5D pour DN100 (~150mm)
 
         [CommandMethod("LOGIK_PIPE")]
         public void CreateSmartTube()
@@ -22,6 +19,18 @@ namespace LogiK3D.Piping
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
+
+            // Récupérer les paramètres depuis la palette
+            double currentOD = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter;
+            double pipeRadius = currentOD / 2.0;
+            
+            // Extraire la valeur numérique du DN (ex: "DN100" -> 100)
+            string dnString = LogiK3D.UI.MainPaletteControl.CurrentDN.Replace("DN", "");
+            double dnValue = 100.0;
+            double.TryParse(dnString, out dnValue);
+            
+            // Rayon standard 1.5D pour les coudes
+            double elbowRadiusLR = 1.5 * dnValue;
 
             // 1. Sélection de la polyligne
             PromptEntityOptions peo = new PromptEntityOptions("\nSélectionnez l'axe du tube (Polyligne ou Polyligne 3D) : ");
@@ -68,7 +77,7 @@ namespace LogiK3D.Piping
                         if (angleDeg > 1.0) // Ignorer les sommets quasi-alignés
                         {
                             // Calcul du retrait (Cutback) pour tronquer le tube
-                            cutbacks[i] = Math.Tan(angleRad / 2.0) * ElbowRadiusLR;
+                            cutbacks[i] = Math.Tan(angleRad / 2.0) * elbowRadiusLR;
 
                             string blockName = angleDeg > 60.0 ? "KOHLER_ELBOW_90" : "KOHLER_ELBOW_45";
 
@@ -94,10 +103,10 @@ namespace LogiK3D.Piping
 
                         if (cutLength > 0)
                         {
-                            Solid3d pipeSolid = CreatePipeSolid(startPt, endPt, PipeRadius);
+                            Solid3d pipeSolid = CreatePipeSolid(startPt, endPt, pipeRadius);
                             
                             // Ajout des XData
-                            AttachLogiKData(pipeSolid, "KOH-DN100-PIPE", cutLength);
+                            AttachLogiKData(pipeSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-PIPE", cutLength);
 
                             btr.AppendEntity(pipeSolid);
                             tr.AddNewlyCreatedDBObject(pipeSolid, true);

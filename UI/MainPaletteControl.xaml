@@ -4,61 +4,67 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="300"
+             d:DesignHeight="800" d:DesignWidth="300"
              Background="#F0F0F0">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-        <!-- Section 1: Configuration de la ligne -->
-        <GroupBox Header="Configuration de la Ligne" Grid.Row="0" Margin="0,0,0,10" Padding="5">
-            <StackPanel>
-                <TextBlock Text="Diamètre Nominal (DN):" Margin="0,0,0,5"/>
-                <ComboBox x:Name="CmbDiameter" SelectedIndex="1" Margin="0,0,0,10">
-                    <ComboBoxItem Content="DN50 (60.3 mm)"/>
-                    <ComboBoxItem Content="DN100 (114.3 mm)"/>
-                    <ComboBoxItem Content="DN150 (168.3 mm)"/>
-                    <ComboBoxItem Content="DN200 (219.1 mm)"/>
-                </ComboBox>
+            <!-- Section 1: Configuration de la ligne -->
+            <GroupBox Header="Configuration de la Ligne" Grid.Row="0" Margin="0,0,0,10" Padding="5">
+                <StackPanel>
+                    <TextBlock Text="Diamètre Nominal (DN):" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="CmbDiameter" Margin="0,0,0,10" SelectionChanged="CmbDiameter_SelectionChanged">
+                        <!-- Rempli dynamiquement dans le code-behind -->
+                    </ComboBox>
 
-                <TextBlock Text="Spécification (Spec):" Margin="0,0,0,5"/>
-                <ComboBox x:Name="CmbSpec" SelectedIndex="0" Margin="0,0,0,10">
-                    <ComboBoxItem Content="CS150 (Acier Carbone)"/>
-                    <ComboBoxItem Content="SS150 (Inox)"/>
-                    <ComboBoxItem Content="PVC (Plastique)"/>
-                </ComboBox>
-            </StackPanel>
-        </GroupBox>
+                    <TextBlock Text="Spécification (Spec):" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="CmbSpec" SelectedIndex="0" Margin="0,0,0,10">
+                        <ComboBoxItem Content="CS150 (Acier Carbone)"/>
+                        <ComboBoxItem Content="SS150 (Inox)"/>
+                        <ComboBoxItem Content="PVC (Plastique)"/>
+                    </ComboBox>
+                </StackPanel>
+            </GroupBox>
 
-        <!-- Section 2: Outils de tracé -->
-        <GroupBox Header="Tracé de Tuyauterie" Grid.Row="1" Margin="0,0,0,10" Padding="5">
-            <StackPanel>
-                <Button x:Name="BtnRoutePipe" Content="Tracer une nouvelle ligne" Height="30" Margin="0,0,0,5" Click="BtnRoutePipe_Click" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
-                <Button x:Name="BtnConvertPolyline" Content="Convertir une polyligne" Height="30" Click="BtnConvertPolyline_Click"/>
-            </StackPanel>
-        </GroupBox>
+            <!-- Section 2: Outils de tracé -->
+            <GroupBox Header="Tracé de Tuyauterie" Grid.Row="1" Margin="0,0,0,10" Padding="5">
+                <StackPanel>
+                    <Button x:Name="BtnRoutePipe" Content="Tracer une nouvelle ligne" Height="30" Margin="0,0,0,5" Click="BtnRoutePipe_Click" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
+                    <Button x:Name="BtnConvertPolyline" Content="Convertir une polyligne" Height="30" Click="BtnConvertPolyline_Click"/>
+                </StackPanel>
+            </GroupBox>
 
-        <!-- Section 3: Insertion de composants -->
-        <GroupBox Header="Composants" Grid.Row="2" Margin="0,0,0,10" Padding="5">
-            <UniformGrid Columns="2" Rows="2">
-                <Button x:Name="BtnInsertValve" Content="Vanne" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="VALVE"/>
-                <Button x:Name="BtnInsertTee" Content="Té" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="TEE"/>
-                <Button x:Name="BtnInsertFlange" Content="Bride" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="FLANGE"/>
-                <Button x:Name="BtnInsertReducer" Content="Réduction" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="REDUCER"/>
-            </UniformGrid>
-        </GroupBox>
+            <!-- Section 3: Insertion de composants -->
+            <GroupBox Header="Composants &amp; Armatures" Grid.Row="2" Margin="0,0,0,10" Padding="5">
+                <UniformGrid Columns="2">
+                    <Button Content="Coude 3D" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="ELBOW_3D"/>
+                    <Button Content="Coude 5D" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="ELBOW_5D"/>
+                    <Button Content="Réd. Concentrique" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="RED_CONC"/>
+                    <Button Content="Réd. Excentrique" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="RED_EXC"/>
+                    <Button Content="Vanne (Gate)" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="VALVE_GATE"/>
+                    <Button Content="Robinet (Globe)" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="VALVE_GLOBE"/>
+                    <Button Content="Clapet (Check)" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="VALVE_CHECK"/>
+                    <Button Content="Filtre (Strainer)" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="FILTER"/>
+                    <Button Content="Bride" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="FLANGE"/>
+                    <Button Content="Té" Margin="2" Height="30" Click="BtnInsertComponent_Click" Tag="TEE"/>
+                </UniformGrid>
+            </GroupBox>
 
-        <!-- Section 4: Informations -->
-        <GroupBox Header="Informations" Grid.Row="3" Margin="0,0,0,10" Padding="5">
-            <StackPanel>
-                <Button x:Name="BtnGetInfo" Content="Lire les infos d'un composant" Height="30" Margin="0,0,0,5" Click="BtnGetInfo_Click"/>
-                <TextBlock x:Name="TxtInfo" Text="Sélectionnez un objet pour voir ses propriétés." TextWrapping="Wrap" Foreground="DarkGray" Margin="0,5,0,0"/>
-            </StackPanel>
-        </GroupBox>
-    </Grid>
+            <!-- Section 4: Informations & Export -->
+            <GroupBox Header="Informations &amp; Export" Grid.Row="3" Margin="0,0,0,10" Padding="5">
+                <StackPanel>
+                    <Button x:Name="BtnGetInfo" Content="Lire les infos d'un composant" Height="30" Margin="0,0,0,5" Click="BtnGetInfo_Click"/>
+                    <Button x:Name="BtnExportPCF" Content="Générer PCF (Isométrique)" Height="30" Margin="0,0,0,5" Click="BtnExportPCF_Click" Background="#28A745" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtInfo" Text="Sélectionnez un objet pour voir ses propriétés." TextWrapping="Wrap" Foreground="DarkGray" Margin="0,5,0,0"/>
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+    </ScrollViewer>
 </UserControl>

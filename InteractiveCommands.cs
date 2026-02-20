@@ -54,7 +54,7 @@ namespace LogiK3D.Piping
                     BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
                     // Création d'un cylindre 3D pour le tube
-                    double radius = 114.3 / 2.0; // DN100 par défaut
+                    double radius = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter / 2.0;
                     double length = currentPoint.DistanceTo(nextPoint);
 
                     if (length > 0)
@@ -86,6 +86,9 @@ namespace LogiK3D.Piping
                         pipeSolid.TransformBy(transform);
                         pipeSolid.ColorIndex = 3; // Vert
 
+                        // Ajout des XData pour l'export PCF
+                        AttachLogiKData(pipeSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-PIPE", length, tr, db);
+
                         btr.AppendEntity(pipeSolid);
                         tr.AddNewlyCreatedDBObject(pipeSolid, true);
                     }
@@ -96,6 +99,29 @@ namespace LogiK3D.Piping
                 // Le point suivant devient le point de départ pour le prochain segment
                 currentPoint = nextPoint;
             }
+        }
+
+        private void AttachLogiKData(Entity ent, string sapCode, double cutLength, Transaction tr, Database db)
+        {
+            string appName = "LogiK_Data";
+            
+            // S'assurer que l'application enregistrée existe
+            RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+            if (!rat.Has(appName))
+            {
+                rat.UpgradeOpen();
+                RegAppTableRecord ratr = new RegAppTableRecord { Name = appName };
+                rat.Add(ratr);
+                tr.AddNewlyCreatedDBObject(ratr, true);
+            }
+
+            ResultBuffer rb = new ResultBuffer(
+                new TypedValue((int)DxfCode.ExtendedDataRegAppName, appName),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString, Guid.NewGuid().ToString()),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString, sapCode),
+                new TypedValue((int)DxfCode.ExtendedDataReal, cutLength)
+            );
+            ent.XData = rb;
         }
 
         [CommandMethod("LOGIK_INSERT_COMP")]

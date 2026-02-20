@@ -15,6 +15,8 @@
     <!-- Nom de la DLL générée -->
     <AssemblyName>LogiK3D</AssemblyName>
     <RootNamespace>LogiK3D</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +24,22 @@
     <!-- ExcludeAssets="runtime" empêche de copier les lourdes DLLs d'AutoCAD dans votre dossier de compilation -->
     <PackageReference Include="AutoCAD.NET" Version="24.3.0" ExcludeAssets="runtime" />
     <PackageReference Include="PresentationFramework" Version="4.6.0" />
+  </ItemGroup>
+
+  <!-- Références aux bibliothèques de Plant 3D (Chemin par défaut pour AutoCAD 2026) -->
+  <ItemGroup>
+    <Reference Include="PnP3dObjectsMgd">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2026\PLNT3D\PnP3dObjectsMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PnPDataObjects">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2026\PnPDataObjects.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PnP3dPartsRepository">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2026\PnP3dPartsRepository.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>
