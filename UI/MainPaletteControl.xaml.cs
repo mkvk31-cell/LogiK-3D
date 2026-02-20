@@ -12,6 +12,9 @@ namespace LogiK3D.UI
 {
     public partial class MainPaletteControl : UserControl
     {
+        // Instance active pour accès depuis les commandes
+        public static MainPaletteControl Instance { get; private set; }
+
         // Propriétés statiques pour partager les données avec les commandes
         public static double CurrentOuterDiameter { get; private set; } = 114.3;
         public static string CurrentDN { get; private set; } = "DN100";
@@ -20,45 +23,60 @@ namespace LogiK3D.UI
         public MainPaletteControl()
         {
             InitializeComponent();
+            Instance = this;
             LoadDiameters();
         }
+
+        public void SetCurrentDN(string dn)
+        {
+            foreach (ComboBoxItem item in CmbDiameter.Items)
+            {
+                if (item.Content.ToString().StartsWith(dn))
+                {
+                    CmbDiameter.SelectedItem = item;
+                    break;
+                }
+            }
+        }
+
+        public static Dictionary<string, double> AvailableDiameters { get; private set; }
 
         private void LoadDiameters()
         {
             // Liste des diamètres ISO/DIN (EN 10220 / ISO 4200 / DIN 2448)
-            var diameters = new Dictionary<string, double>
+            AvailableDiameters = new Dictionary<string, double>
             {
-                {"DN10 (17.2 mm)", 17.2},
-                {"DN15 (21.3 mm)", 21.3},
-                {"DN20 (26.9 mm)", 26.9},
-                {"DN25 (33.7 mm)", 33.7},
-                {"DN32 (42.4 mm)", 42.4},
-                {"DN40 (48.3 mm)", 48.3},
-                {"DN50 (60.3 mm)", 60.3},
-                {"DN65 (76.1 mm)", 76.1},
-                {"DN80 (88.9 mm)", 88.9},
-                {"DN100 (114.3 mm)", 114.3},
-                {"DN125 (139.7 mm)", 139.7},
-                {"DN150 (168.3 mm)", 168.3},
-                {"DN200 (219.1 mm)", 219.1},
-                {"DN250 (273.0 mm)", 273.0},
-                {"DN300 (323.9 mm)", 323.9},
-                {"DN350 (355.6 mm)", 355.6},
-                {"DN400 (406.4 mm)", 406.4},
-                {"DN450 (457.0 mm)", 457.0},
-                {"DN500 (508.0 mm)", 508.0},
-                {"DN600 (610.0 mm)", 610.0}
+                {"DN10", 17.2},
+                {"DN15", 21.3},
+                {"DN20", 26.9},
+                {"DN25", 33.7},
+                {"DN32", 42.4},
+                {"DN40", 48.3},
+                {"DN50", 60.3},
+                {"DN65", 76.1},
+                {"DN80", 88.9},
+                {"DN100", 114.3},
+                {"DN125", 139.7},
+                {"DN150", 168.3},
+                {"DN200", 219.1},
+                {"DN250", 273.0},
+                {"DN300", 323.9},
+                {"DN350", 355.6},
+                {"DN400", 406.4},
+                {"DN450", 457.0},
+                {"DN500", 508.0},
+                {"DN600", 610.0}
             };
 
-            foreach (var kvp in diameters)
+            foreach (var kvp in AvailableDiameters)
             {
                 ComboBoxItem item = new ComboBoxItem();
-                item.Content = kvp.Key;
+                item.Content = $"{kvp.Key} ({kvp.Value} mm)";
                 item.Tag = kvp.Value;
                 CmbDiameter.Items.Add(item);
                 
                 // Sélectionner DN100 par défaut
-                if (kvp.Key.StartsWith("DN100"))
+                if (kvp.Key == "DN100")
                 {
                     CmbDiameter.SelectedItem = item;
                 }

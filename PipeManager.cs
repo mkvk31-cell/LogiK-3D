@@ -159,7 +159,7 @@ namespace LogiK3D.Piping
             SaveLinkedSolids(poly, newSolidHandles, tr);
         }
 
-        private static void DeleteLinkedSolids(Entity poly, Transaction tr)
+        public static void DeleteLinkedSolids(Entity poly, Transaction tr)
         {
             if (poly.ExtensionDictionary.IsNull) return;
             

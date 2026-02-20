@@ -132,27 +132,8 @@ namespace LogiK3D.Piping
             ent.XData = rb;
         }
 
-        [CommandMethod("LOGIK_INSERT_COMP")]
-        public void InsertComponent()
-        {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Editor ed = doc.Editor;
-
-            // Récupérer l'argument passé par la palette (ex: VALVE, TEE, etc.)
-            PromptResult pr = ed.GetString("\nType de composant à insérer : ");
-            if (pr.Status != PromptStatus.OK) return;
-
-            string compType = pr.StringResult;
-
-            PromptPointOptions ppo = new PromptPointOptions($"\nSpécifiez le point d'insertion pour {compType} : ");
-            PromptPointResult ppr = ed.GetPoint(ppo);
-
-            if (ppr.Status == PromptStatus.OK)
-            {
-                // TODO: Insérer le bloc correspondant au composant
-                ed.WriteMessage($"\n[Simulation] Insertion d'un(e) {compType} au point {ppr.Value}");
-            }
-        }
+        // La commande LOGIK_INSERT_COMP a été déplacée dans SmartTubeCommands.cs
+        // pour utiliser le vrai générateur de blocs 3D.
 
         [CommandMethod("LOGIK_GET_INFO")]
         public void GetInfo()
