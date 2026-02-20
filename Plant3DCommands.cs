@@ -50,13 +50,17 @@ namespace LogiK3D.Piping
                     {
                         writer.WriteLine("UNITS-BORE INCH");
                         writer.WriteLine("UNITS-CO-ORDS INCH");
-                        writer.WriteLine("    UNITS-WEIGHT LBS");
+                        writer.WriteLine("UNITS-WEIGHT LBS");
+                        writer.WriteLine("UNITS-BOLT-LENGTH INCH");
+                        writer.WriteLine("UNITS-BOLT-DIA INCH");
                     }
                     else
                     {
                         writer.WriteLine("UNITS-BORE MM");
                         writer.WriteLine("UNITS-CO-ORDS MM");
-                        writer.WriteLine("    UNITS-WEIGHT KGS");
+                        writer.WriteLine("UNITS-WEIGHT KGS");
+                        writer.WriteLine("UNITS-BOLT-LENGTH MM");
+                        writer.WriteLine("UNITS-BOLT-DIA MM");
                     }
                     writer.WriteLine("");
                     using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -241,7 +245,7 @@ namespace LogiK3D.Piping
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
                                         writer.WriteLine($"    ITEM-DESCRIPTION REDUCTION {grandDnValue}x{petitDnValue}");
                                         writer.WriteLine($"    PIPING-SPEC LOGIK3D");
-                                        writer.WriteLine($"    SKEY RCON");
+                                        writer.WriteLine($"    SKEY RCBW");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
                                     else if (compType.Contains("VANNE") || compType.Contains("VALVE"))
