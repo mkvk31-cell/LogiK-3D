@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net48 est le standard pour AutoCAD 2021 à 2024. 
+         Si vous utilisez AutoCAD 2025, changez pour : net8.0-windows -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    
+    <!-- Empêche la création de sous-dossiers "net48" dans le dossier bin -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    
+    <!-- Nom de la DLL générée -->
+    <AssemblyName>LogiK3D</AssemblyName>
+    <RootNamespace>LogiK3D</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Package NuGet officiel d'AutoCAD (Version 24.3 = AutoCAD 2024) -->
+    <!-- ExcludeAssets="runtime" empêche de copier les lourdes DLLs d'AutoCAD dans votre dossier de compilation -->
+    <PackageReference Include="AutoCAD.NET" Version="24.3.0" ExcludeAssets="runtime" />
+    <PackageReference Include="PresentationFramework" Version="4.6.0" />
+  </ItemGroup>
+
+</Project>
