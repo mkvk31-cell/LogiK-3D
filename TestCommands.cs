@@ -16,11 +16,12 @@ namespace LogiK3D.Piping
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
-            PromptKeywordOptions pko = new PromptKeywordOptions("\nQuel bloc tester ? [Coude/Tee/Reduction/Bride]: ");
+            PromptKeywordOptions pko = new PromptKeywordOptions("\nQuel bloc tester ? [Coude/Tee/Reduction/Bride/Vanne]: ");
             pko.Keywords.Add("Coude");
             pko.Keywords.Add("Tee");
             pko.Keywords.Add("Reduction");
             pko.Keywords.Add("Bride");
+            pko.Keywords.Add("Vanne");
             pko.AllowNone = false;
 
             PromptResult pr = ed.GetKeywords(pko);
@@ -48,6 +49,9 @@ namespace LogiK3D.Piping
                         break;
                     case "Bride":
                         blockId = generator.GetOrCreateFlange(114.3, 220.0, 16.0, 50.0, blockName);
+                        break;
+                    case "Vanne":
+                        blockId = generator.GetOrCreateValve(250.0, 220.0, 150.0, false, blockName);
                         break;
                 }
 

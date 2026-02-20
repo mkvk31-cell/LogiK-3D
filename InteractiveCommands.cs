@@ -23,6 +23,8 @@ namespace LogiK3D.Piping
             if (pprStart.Status != PromptStatus.OK) return;
 
             Point3d currentPoint = pprStart.Value;
+            Point3dCollection points = new Point3dCollection();
+            points.Add(currentPoint);
 
             // 2. Boucle pour tracer les segments
             while (true)
@@ -46,90 +48,42 @@ namespace LogiK3D.Piping
                 }
 
                 Point3d nextPoint = pprNext.Value;
+                points.Add(nextPoint);
+                currentPoint = nextPoint;
+            }
 
-                // 3. Dessiner le segment de tube (Solid3d)
+            if (points.Count > 1)
+            {
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
                     BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
-                    // Création d'un cylindre 3D pour le tube
-                    double radius = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter / 2.0;
-                    double thickness = LogiK3D.UI.MainPaletteControl.CurrentThickness;
-                    double length = currentPoint.DistanceTo(nextPoint);
+                    Polyline3d poly3d = new Polyline3d();
+                    btr.AppendEntity(poly3d);
+                    tr.AddNewlyCreatedDBObject(poly3d, true);
 
-                    if (length > 0)
+                    foreach (Point3d pt in points)
                     {
-                        Solid3d pipeSolid = new Solid3d();
-                        pipeSolid.CreateFrustum(length, radius, radius, radius);
-
-                        if (thickness > 0 && thickness < radius)
-                        {
-                            Solid3d innerPipe = new Solid3d();
-                            innerPipe.CreateFrustum(length + 2.0, radius - thickness, radius - thickness, radius - thickness);
-                            pipeSolid.BooleanOperation(BooleanOperationType.BoolSubtract, innerPipe);
-                        }
-
-                        // Positionner et orienter le cylindre
-                        Vector3d direction = (nextPoint - currentPoint).GetNormal();
-                        Point3d midPoint = currentPoint + (direction * (length / 2.0));
-
-                        // Le cylindre est créé le long de l'axe Z par défaut.
-                        // On doit le tourner pour l'aligner avec notre direction.
-                        Vector3d zAxis = Vector3d.ZAxis;
-                        double angle = zAxis.GetAngleTo(direction);
-                        Vector3d axisOfRotation = zAxis.CrossProduct(direction);
-
-                        Matrix3d transform = Matrix3d.Displacement(midPoint.GetAsVector());
-                        
-                        if (!axisOfRotation.IsZeroLength())
-                        {
-                            transform = transform * Matrix3d.Rotation(angle, axisOfRotation, Point3d.Origin);
-                        }
-                        else if (direction.Z < 0) // Cas où la direction est exactement -Z
-                        {
-                            transform = transform * Matrix3d.Rotation(Math.PI, Vector3d.XAxis, Point3d.Origin);
-                        }
-
-                        pipeSolid.TransformBy(transform);
-                        pipeSolid.ColorIndex = 3; // Vert
-
-                        // Ajout des XData pour l'export PCF
-                        AttachLogiKData(pipeSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-PIPE", length, tr, db);
-
-                        btr.AppendEntity(pipeSolid);
-                        tr.AddNewlyCreatedDBObject(pipeSolid, true);
+                        PolylineVertex3d vertex = new PolylineVertex3d(pt);
+                        poly3d.AppendVertex(vertex);
+                        tr.AddNewlyCreatedDBObject(vertex, true);
                     }
+
+                    // Attacher les données de ligne à la polyligne
+                    string lineNumber = "LIGNE_INCONNUE";
+                    string currentDN = LogiK3D.UI.MainPaletteControl.CurrentDN;
+                    double currentOD = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter;
+                    double currentThickness = LogiK3D.UI.MainPaletteControl.CurrentThickness;
+
+                    LogiK3D.Piping.PipeManager.AttachLineData(poly3d, lineNumber, currentDN, currentOD, currentThickness, tr, db);
+
+                    // Générer la tuyauterie
+                    LogiK3D.Piping.PipeManager.GeneratePiping(poly3d, lineNumber, currentDN, currentOD, currentThickness, tr);
 
                     tr.Commit();
                 }
-
-                // Le point suivant devient le point de départ pour le prochain segment
-                currentPoint = nextPoint;
             }
-        }
-
-        private void AttachLogiKData(Entity ent, string sapCode, double cutLength, Transaction tr, Database db)
-        {
-            string appName = "LogiK_Data";
-            
-            // S'assurer que l'application enregistrée existe
-            RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
-            if (!rat.Has(appName))
-            {
-                rat.UpgradeOpen();
-                RegAppTableRecord ratr = new RegAppTableRecord { Name = appName };
-                rat.Add(ratr);
-                tr.AddNewlyCreatedDBObject(ratr, true);
-            }
-
-            ResultBuffer rb = new ResultBuffer(
-                new TypedValue((int)DxfCode.ExtendedDataRegAppName, appName),
-                new TypedValue((int)DxfCode.ExtendedDataAsciiString, Guid.NewGuid().ToString()),
-                new TypedValue((int)DxfCode.ExtendedDataAsciiString, sapCode),
-                new TypedValue((int)DxfCode.ExtendedDataReal, cutLength)
-            );
-            ent.XData = rb;
         }
 
         // La commande LOGIK_INSERT_COMP a été déplacée dans SmartTubeCommands.cs
