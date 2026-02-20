@@ -272,8 +272,8 @@ namespace LogiK3D.Piping
                 Solid3d reducerSolid = new Solid3d();
                 try
                 {
-                    // Tronc de cône le long de l'axe Z
-                    reducerSolid.CreateFrustum(length, smallDiameter / 2.0, smallDiameter / 2.0, largeDiameter / 2.0);
+// Tronc de cône le long de l'axe Z (base = grand diamètre, top = petit diamètre)
+                    reducerSolid.CreateFrustum(length, largeDiameter / 2.0, largeDiameter / 2.0, smallDiameter / 2.0);
                     
                     // Déplacer pour que la base (grand diamètre) soit à Z=0 et le sommet à Z=length
                     reducerSolid.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, length / 2.0)));

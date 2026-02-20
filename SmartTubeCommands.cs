@@ -357,51 +357,51 @@ namespace LogiK3D.Piping
                         if (flangeBlockId != ObjectId.Null)
                         {
                             // Bride 1 (avant)
-                            Point3d f1Pt = insertPt - direction * (compLength / 2.0 + flangeLength);
-                            BlockReference f1 = new BlockReference(f1Pt, flangeBlockId);
-                            
-                            Vector3d xAxis = Vector3d.XAxis;
-                            double angle1 = xAxis.GetAngleTo(direction);
-                            Vector3d axisOfRotation1 = xAxis.CrossProduct(direction);
-                            if (!axisOfRotation1.IsZeroLength()) f1.TransformBy(Matrix3d.Rotation(angle1, axisOfRotation1, f1Pt));
-                            else if (direction.X < 0) f1.TransformBy(Matrix3d.Rotation(Math.PI, Vector3d.ZAxis, f1Pt));
-                            
-                            btrSpace.AppendEntity(f1);
-                            tr.AddNewlyCreatedDBObject(f1, true);
-                            
-                            // Attributs Bride 1
-                            Dictionary<string, string> attrF1 = new Dictionary<string, string>
-                            {
-                                { "POSITION", "" }, { "DESIGNATION", "BRIDE" }, { "DN", currentDN },
-                                { "PN", $"PN{pnVal}" }, { "ID", $"KOH-{currentDN}-FLANGE" }, { "NO LIGNE", lineNumber }
-                            };
-                            BlockTableRecord btrF1 = (BlockTableRecord)tr.GetObject(flangeBlockId, OpenMode.ForRead);
-                            foreach (ObjectId entId in btrF1)
-                            {
-                                if (tr.GetObject(entId, OpenMode.ForRead) is AttributeDefinition attrDef)
+                                Point3d f1Pt = insertPt - direction * flangeLength;
+                                BlockReference f1 = new BlockReference(f1Pt, flangeBlockId);
+
+                                Vector3d xAxis = Vector3d.XAxis;
+                                double angle1 = xAxis.GetAngleTo(direction);
+                                Vector3d axisOfRotation1 = xAxis.CrossProduct(direction);
+                                if (!axisOfRotation1.IsZeroLength()) f1.TransformBy(Matrix3d.Rotation(angle1, axisOfRotation1, f1Pt));
+                                else if (direction.X < 0) f1.TransformBy(Matrix3d.Rotation(Math.PI, Vector3d.ZAxis, f1Pt));
+
+                                btrSpace.AppendEntity(f1);
+                                tr.AddNewlyCreatedDBObject(f1, true);
+
+                                // Attributs Bride 1
+                                Dictionary<string, string> attrF1 = new Dictionary<string, string>
                                 {
-                                    AttributeReference attrRef = new AttributeReference();
-                                    attrRef.SetAttributeFromBlock(attrDef, f1.BlockTransform);
-                                    if (attrF1.ContainsKey(attrDef.Tag.ToUpper())) attrRef.TextString = attrF1[attrDef.Tag.ToUpper()];
-                                    f1.AttributeCollection.AppendAttribute(attrRef);
-                                    tr.AddNewlyCreatedDBObject(attrRef, true);
+                                    { "POSITION", "" }, { "DESIGNATION", "BRIDE" }, { "DN", currentDN },
+                                    { "PN", $"PN{pnVal}" }, { "ID", $"KOH-{currentDN}-FLANGE" }, { "NO LIGNE", lineNumber }
+                                };
+                                BlockTableRecord btrF1 = (BlockTableRecord)tr.GetObject(flangeBlockId, OpenMode.ForRead);
+                                foreach (ObjectId entId in btrF1)
+                                {
+                                    if (tr.GetObject(entId, OpenMode.ForRead) is AttributeDefinition attrDef)
+                                    {
+                                        AttributeReference attrRef = new AttributeReference();
+                                        attrRef.SetAttributeFromBlock(attrDef, f1.BlockTransform);
+                                        if (attrF1.ContainsKey(attrDef.Tag.ToUpper())) attrRef.TextString = attrF1[attrDef.Tag.ToUpper()];
+                                        f1.AttributeCollection.AppendAttribute(attrRef);
+                                        tr.AddNewlyCreatedDBObject(attrRef, true);
+                                    }
                                 }
-                            }
 
-                            // Bride 2 (après)
-                            Point3d f2Pt = insertPt + direction * (compLength / 2.0 + flangeLength);
-                            BlockReference f2 = new BlockReference(f2Pt, flangeBlockId);
-                            
-                            Vector3d dir2 = direction.Negate();
-                            double angle2 = xAxis.GetAngleTo(dir2);
-                            Vector3d axisOfRotation2 = xAxis.CrossProduct(dir2);
-                            if (!axisOfRotation2.IsZeroLength()) f2.TransformBy(Matrix3d.Rotation(angle2, axisOfRotation2, f2Pt));
-                            else if (dir2.X < 0) f2.TransformBy(Matrix3d.Rotation(Math.PI, Vector3d.ZAxis, f2Pt));
-                            
-                            btrSpace.AppendEntity(f2);
-                            tr.AddNewlyCreatedDBObject(f2, true);
+                                // Bride 2 (apr�s)
+                                  Point3d f2Pt = insertPt + direction * (compLength + flangeLength);
+                                  BlockReference f2 = new BlockReference(f2Pt, flangeBlockId);
 
-                            // Attributs Bride 2
+                                  Vector3d dir2 = direction.Negate();
+                                  double angle2 = xAxis.GetAngleTo(dir2);
+                                  Vector3d axisOfRotation2 = xAxis.CrossProduct(dir2);
+                                  if (!axisOfRotation2.IsZeroLength()) f2.TransformBy(Matrix3d.Rotation(angle2, axisOfRotation2, f2Pt));
+                                  else if (dir2.X < 0) f2.TransformBy(Matrix3d.Rotation(Math.PI, Vector3d.ZAxis, f2Pt));
+
+                                  btrSpace.AppendEntity(f2);
+                                  tr.AddNewlyCreatedDBObject(f2, true);
+
+                                  // Attributs Bride 2
                             foreach (ObjectId entId in btrF1)
                             {
                                 if (tr.GetObject(entId, OpenMode.ForRead) is AttributeDefinition attrDef)
@@ -491,6 +491,7 @@ namespace LogiK3D.Piping
                             try
                             {
                                 PipeManager.DeleteLinkedSolids(pipeCurve, tr);
+                                PipeManager.UpdateLineComponents(pipeCurve, lineNumber, currentDN, tr);
                                 PipeManager.GeneratePiping(pipeCurve, lineNumber, currentDN, currentOD, currentThickness, tr);
                                 ed.WriteMessage($"\nTuyauterie mise à jour.");
                             }
@@ -761,3 +762,4 @@ namespace LogiK3D.Piping
         }
     }
 }
+

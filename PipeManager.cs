@@ -100,18 +100,269 @@ namespace LogiK3D.Piping
             _isUpdating = false;
         }
 
-        private class InlineComponent
+        public class InlineComponent
+    {
+        public double Param1 { get; set; }
+        public double Param2 { get; set; }
+        public Point3d Pt1 { get; set; }
+        public Point3d Pt2 { get; set; }
+        public string CompType { get; set; }
+        public string TargetDN { get; set; }
+        public double TargetOD { get; set; }
+        public ObjectId BlockId { get; set; }
+    }
+
+    public static void UpdateLineComponents(Entity poly, string lineNumber, string baseDN, Transaction tr)
+    {
+        Database db = poly.Database;
+        Curve polyCurve = poly as Curve;
+        if (polyCurve == null) return;
+
+        BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+        List<InlineComponent> inlineComps = new List<InlineComponent>();
+
+        // 1. Collect all blocks on the line
+        foreach (ObjectId id in btr)
         {
-            public double Param1 { get; set; }
-            public double Param2 { get; set; }
-            public Point3d Pt1 { get; set; }
-            public Point3d Pt2 { get; set; }
-            public string CompType { get; set; }
-            public string TargetDN { get; set; }
-            public double TargetOD { get; set; }
+            if (id.ObjectClass.DxfName == "INSERT")
+            {
+                BlockReference bref = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
+                if (bref != null)
+                {
+                    string bLineNumber = "";
+                    string bCompType = "";
+                    string bTargetDN = "";
+                    string bGrandDN = "";
+                    string bDN = "";
+
+                    foreach (ObjectId attId in bref.AttributeCollection)
+                    {
+                        AttributeReference attRef = tr.GetObject(attId, OpenMode.ForRead) as AttributeReference;
+                        if (attRef != null)
+                        {
+                            string tag = attRef.Tag.ToUpper();
+                            if (tag == "NO LIGNE") bLineNumber = attRef.TextString;
+                            else if (tag == "DESIGNATION") bCompType = attRef.TextString;
+                            else if (tag == "PETIT DN") bTargetDN = attRef.TextString;
+                            else if (tag == "GRAND DN") bGrandDN = attRef.TextString;
+                            else if (tag == "DN") bDN = attRef.TextString;
+                        }
+                    }
+
+                    if (bLineNumber == lineNumber && bCompType != "COUDE" && !bCompType.Contains("ELBOW"))
+                    {
+                        List<Point3d> ports = new List<Point3d>();
+                        BlockTableRecord btrBlock = tr.GetObject(bref.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
+                        foreach (ObjectId entId in btrBlock)
+                        {
+                            Entity bEnt = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                            if (bEnt is DBPoint pt)
+                            {
+                                ports.Add(pt.Position.TransformBy(bref.BlockTransform));
+                            }
+                        }
+
+                        if (ports.Count >= 2)
+                        {
+                            try
+                            {
+                                Point3d closest1 = polyCurve.GetClosestPointTo(ports[0], false);
+                                Point3d closest2 = polyCurve.GetClosestPointTo(ports[1], false);
+
+                                if (closest1.DistanceTo(ports[0]) < 1.0 && closest2.DistanceTo(ports[1]) < 1.0)
+                                {
+                                    double param1 = polyCurve.GetParameterAtPoint(closest1);
+                                    double param2 = polyCurve.GetParameterAtPoint(closest2);
+
+                                    InlineComponent ic = new InlineComponent
+                                    {
+                                        Param1 = Math.Min(param1, param2),
+                                        Param2 = Math.Max(param1, param2),
+                                        Pt1 = param1 < param2 ? closest1 : closest2,
+                                        Pt2 = param1 < param2 ? closest2 : closest1,
+                                        CompType = bCompType,
+                                        BlockId = id
+                                    };
+
+                                    if (bCompType.Contains("REDUCER") || bCompType.Contains("RED_CONC") || bCompType.Contains("RED_EXC"))
+                                    {
+                                        ic.TargetDN = param1 < param2 ? bTargetDN : bGrandDN;
+                                    }
+                                    else
+                                    {
+                                        ic.TargetDN = bDN;
+                                    }
+
+                                    inlineComps.Add(ic);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
         }
 
-        public static void GeneratePiping(Entity poly, string lineNumber, string dn, double od, double thickness, Transaction tr)
+        // 2. Sort components by parameter along the polyline
+        inlineComps.Sort((a, b) => a.Param1.CompareTo(b.Param1));
+
+        // 3. Traverse and update DN
+        string currentDN = baseDN;
+        PipingGenerator generator = new PipingGenerator();
+
+        foreach (var ic in inlineComps)
+        {
+            bool isReducer = ic.CompType.Contains("REDUCER") || ic.CompType.Contains("RED_CONC") || ic.CompType.Contains("RED_EXC");
+
+            if (isReducer)
+            {
+                // Reducer changes the current DN for subsequent components
+                currentDN = ic.TargetDN;
+            }
+            else if (ic.TargetDN != currentDN)
+            {
+                // Component DN doesn't match current line DN, needs replacement
+                BlockReference oldBref = tr.GetObject(ic.BlockId, OpenMode.ForWrite) as BlockReference;
+                if (oldBref != null)
+                {
+                    // Extract old attributes
+                    Dictionary<string, string> oldAttrs = new Dictionary<string, string>();
+                    foreach (ObjectId attId in oldBref.AttributeCollection)
+                    {
+                        AttributeReference attRef = tr.GetObject(attId, OpenMode.ForRead) as AttributeReference;
+                        if (attRef != null)
+                        {
+                            oldAttrs[attRef.Tag.ToUpper()] = attRef.TextString;
+                        }
+                    }
+
+                    // Determine new block parameters
+                    int dnVal = 0;
+                    if (currentDN.StartsWith("DN")) int.TryParse(currentDN.Substring(2), out dnVal);
+                    else int.TryParse(currentDN, out dnVal);
+
+                    int pnVal = 16;
+                    if (oldAttrs.ContainsKey("PN") && oldAttrs["PN"].StartsWith("PN"))
+                    {
+                        int.TryParse(oldAttrs["PN"].Substring(2), out pnVal);
+                    }
+
+                    ObjectId newBlockId = ObjectId.Null;
+                    string newSapCode = oldAttrs.ContainsKey("ID") ? oldAttrs["ID"] : "INCONNU";
+
+                    if (ic.CompType == "BRIDE" || ic.CompType == "FLANGE")
+                    {
+                        var flangeData = LogiK3D.Specs.KohlerDatabase.FindFlange(currentDN);
+                        double flangeOD = InlineComponentDatabase.GetFlangeOuterDiameter(dnVal, pnVal);
+                        double flangeThickness = flangeData != null && flangeData.WallThickness > 0 ? flangeData.WallThickness : 16.0;
+                        double flangeLength = flangeThickness + 30.0;
+                        
+                        double currentOD = 0;
+                        if (LogiK3D.UI.MainPaletteControl.AvailableDiameters != null && LogiK3D.UI.MainPaletteControl.AvailableDiameters.ContainsKey(currentDN))
+                        {
+                            currentOD = LogiK3D.UI.MainPaletteControl.AvailableDiameters[currentDN];
+                        }
+
+                        string blockName = $"FLANGE_{currentDN}_{flangeOD}_{flangeThickness}";
+                        newBlockId = generator.GetOrCreateFlange(currentOD, flangeOD, flangeThickness, flangeLength, blockName);
+                        newSapCode = $"KOH-{currentDN}-FLANGE";
+                    }
+                    else if (ic.CompType == "TEE")
+                    {
+                        double currentOD = 0;
+                        if (LogiK3D.UI.MainPaletteControl.AvailableDiameters != null && LogiK3D.UI.MainPaletteControl.AvailableDiameters.ContainsKey(currentDN))
+                        {
+                            currentOD = LogiK3D.UI.MainPaletteControl.AvailableDiameters[currentDN];
+                        }
+                        double length = currentOD * 2.0;
+                        double branchHeight = currentOD;
+                        string blockName = $"TEE_{currentDN}";
+                        newBlockId = generator.GetOrCreateTee(currentOD, currentOD, length, branchHeight, blockName);
+                        newSapCode = $"KOH-{currentDN}-TEE";
+                    }
+                    else if (ic.CompType == "VANNE" || ic.CompType == "VALVE" || ic.CompType == "VALVE_GLOBE" || ic.CompType == "VALVE_BALL" || ic.CompType == "CHECK_VALVE")
+                    {
+                        var dims = InlineComponentDatabase.GetDimensions(ic.CompType, dnVal, pnVal);
+                        if (dims != null)
+                        {
+                            bool isPneumatic = oldAttrs.ContainsKey("ID") && oldAttrs["ID"].Contains("PNEU");
+                            string blockName = $"{ic.CompType}_DN{dnVal}_PN{pnVal}_{(isPneumatic ? "PNEU" : "MAN")}";
+                            newBlockId = generator.GetOrCreateValve(dims.Length, dims.FlangeDiameter, dims.Height, isPneumatic, blockName);
+                            newSapCode = $"LOGIK-{currentDN}-{ic.CompType}";
+                        }
+                    }
+                    else if (ic.CompType == "FILTRE" || ic.CompType == "FILTER")
+                    {
+                        var dims = InlineComponentDatabase.GetDimensions(ic.CompType, dnVal, pnVal);
+                        if (dims != null)
+                        {
+                            string blockName = $"FILTER_Y_DN{dnVal}_PN{pnVal}";
+                            newBlockId = generator.GetOrCreateYFilter(dims.Length, dims.FlangeDiameter, dims.Height, blockName);
+                            newSapCode = $"LOGIK-{currentDN}-FILTER";
+                        }
+                    }
+                    else if (ic.CompType == "DEBIMETRE" || ic.CompType == "FLOWMETER")
+                    {
+                        var dims = InlineComponentDatabase.GetDimensions(ic.CompType, dnVal, pnVal);
+                        if (dims != null)
+                        {
+                            string blockName = $"FLOWMETER_MAG_DN{dnVal}_PN{pnVal}";
+                            newBlockId = generator.GetOrCreateFlowmeter(dims.Length, dims.FlangeDiameter, dims.Height, blockName);
+                            newSapCode = $"LOGIK-{currentDN}-FLOWMETER";
+                        }
+                    }
+                    else if (ic.CompType == "DIAPHRAGME" || ic.CompType == "DIAPHRAGM")
+                    {
+                        var dims = InlineComponentDatabase.GetDimensions(ic.CompType, dnVal, pnVal);
+                        if (dims != null)
+                        {
+                            string blockName = $"DIAPHRAGM_DN{dnVal}_PN{pnVal}";
+                            newBlockId = generator.GetOrCreateDiaphragm(dims.Length, dims.FlangeDiameter, dims.Height, blockName);
+                            newSapCode = $"LOGIK-{currentDN}-DIAPHRAGM";
+                        }
+                    }
+
+                    if (newBlockId != ObjectId.Null)
+                    {
+                        // Create new block reference
+                        BlockReference newBref = new BlockReference(oldBref.Position, newBlockId);
+                        newBref.BlockTransform = oldBref.BlockTransform; // Keep same orientation
+
+                        btr.AppendEntity(newBref);
+                        tr.AddNewlyCreatedDBObject(newBref, true);
+
+                        // Update attributes
+                        oldAttrs["DN"] = currentDN;
+                        oldAttrs["ID"] = newSapCode;
+
+                        BlockTableRecord btrBlock = (BlockTableRecord)tr.GetObject(newBlockId, OpenMode.ForRead);
+                        foreach (ObjectId entId in btrBlock)
+                        {
+                            Entity ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                            if (ent is AttributeDefinition attrDef)
+                            {
+                                AttributeReference attrRef = new AttributeReference();
+                                attrRef.SetAttributeFromBlock(attrDef, newBref.BlockTransform);
+
+                                if (oldAttrs.ContainsKey(attrDef.Tag.ToUpper()))
+                                {
+                                    attrRef.TextString = oldAttrs[attrDef.Tag.ToUpper()];
+                                }
+
+                                newBref.AttributeCollection.AppendAttribute(attrRef);
+                                tr.AddNewlyCreatedDBObject(attrRef, true);
+                            }
+                        }
+
+                        // Erase old block
+                        oldBref.Erase();
+                    }
+                }
+            }
+        }
+    }
+
+    public static void GeneratePiping(Entity poly, string lineNumber, string dn, double od, double thickness, Transaction tr)
         {
             Database db = poly.Database;
             
@@ -215,6 +466,8 @@ namespace LogiK3D.Piping
                                                     }
                                                 }
                                             }
+                                            
+                                            // Les brides sont deja inserees comme des blocs separes.
                                             
                                             inlineComps.Add(ic);
                                         }
@@ -624,3 +877,7 @@ namespace LogiK3D.Piping
         }
     }
 }
+
+
+
+
