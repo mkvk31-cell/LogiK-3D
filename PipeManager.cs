@@ -501,14 +501,19 @@ namespace LogiK3D.Piping
                 }
                 bref.TransformBy(Matrix3d.Rotation(angle, axisOfRotation, insertPt));
 
-                // Aligner l'axe Y du bloc avec le plan du coude
+                // Aligner l'axe Z du bloc avec la normale du plan du coude
                 Vector3d normal = vIn.CrossProduct(vOut).GetNormal();
-                Vector3d currentYAxis = Vector3d.YAxis.TransformBy(bref.BlockTransform);
-                double angleY = currentYAxis.GetAngleTo(normal);
-                Vector3d axisOfRotationY = currentYAxis.CrossProduct(normal);
-                if (!axisOfRotationY.IsZeroLength())
+                Vector3d currentZAxis = Vector3d.ZAxis.TransformBy(bref.BlockTransform);
+                double angleZ = currentZAxis.GetAngleTo(normal);
+                Vector3d axisOfRotationZ = currentZAxis.CrossProduct(normal);
+                if (!axisOfRotationZ.IsZeroLength())
                 {
-                    bref.TransformBy(Matrix3d.Rotation(angleY, axisOfRotationY, insertPt));
+                    bref.TransformBy(Matrix3d.Rotation(angleZ, axisOfRotationZ, insertPt));
+                }
+                else if (Math.Abs(angleZ - Math.PI) < 0.01)
+                {
+                    // Si l'axe Z est exactement opposé, on tourne de 180° autour de l'axe X (vIn)
+                    bref.TransformBy(Matrix3d.Rotation(Math.PI, vIn, insertPt));
                 }
 
                 btr.AppendEntity(bref);
