@@ -30,19 +30,34 @@ namespace LogiK3D.Piping
                 return;
             }
 
-            // 2. Générer notre propre fichier PCF sans utiliser Plant 3D
+            // 2. Demander les unités (Métrique ou Impérial)
+            PromptKeywordOptions pko = new PromptKeywordOptions("\nUnités du projet Plant 3D [Metrique/Imperial] : ", "Metrique Imperial");
+            pko.AllowNone = true;
+            PromptResult pkr = ed.GetKeywords(pko);
+            bool isImperial = pkr.Status == PromptStatus.OK && pkr.StringResult == "Imperial";
+
+            // 3. Générer notre propre fichier PCF sans utiliser Plant 3D
             try
             {
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                string pcfPath = Path.Combine(desktopPath, $"LogiK3D_Export_{DateTime.Now:yyyyMMdd_HHmmss}.pcf");
+                string pcfPath = Path.Combine(desktopPath, $"LogiK3D_Export_{DateTime.Now:yyyyMMdd_HHmmss}_{(isImperial ? "INCH" : "MM")}.pcf");
 
                 using (StreamWriter writer = new StreamWriter(pcfPath, false, Encoding.ASCII))
                 {
                     // En-tête standard PCF
                     writer.WriteLine("ISOMETRIC-DEF-FILE");
-                    writer.WriteLine("UNITS-BORE MM");
-                    writer.WriteLine("UNITS-CO-ORDS MM");
-                    writer.WriteLine("UNITS-WEIGHT KGS");
+                    if (isImperial)
+                    {
+                        writer.WriteLine("    UNITS-BORE INCH");
+                        writer.WriteLine("    UNITS-CO-ORDS INCH");
+                        writer.WriteLine("    UNITS-WEIGHT LBS");
+                    }
+                    else
+                    {
+                        writer.WriteLine("    UNITS-BORE MM");
+                        writer.WriteLine("    UNITS-CO-ORDS MM");
+                        writer.WriteLine("    UNITS-WEIGHT KGS");
+                    }
                     writer.WriteLine("");
                     using (Transaction tr = db.TransactionManager.StartTransaction())
                     {
@@ -91,6 +106,7 @@ namespace LogiK3D.Piping
                         foreach (var group in lineGroups)
                         {
                             writer.WriteLine($"PIPELINE-REFERENCE {group.Key}");
+                            writer.WriteLine($"    REVISION 0");
                             writer.WriteLine("");
 
                             foreach (Entity ent in group.Value)
