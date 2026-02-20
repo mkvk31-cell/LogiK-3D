@@ -63,41 +63,12 @@ namespace LogiK3D.Piping
                     BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
-                    double[] cutbacks = new double[vertices.Count];
-                    
-                    // 2. Calcul des angles et insertion des coudes
-                    for (int i = 1; i < vertices.Count - 1; i++)
-                    {
-                        Vector3d vIn = (vertices[i] - vertices[i - 1]).GetNormal();
-                        Vector3d vOut = (vertices[i + 1] - vertices[i]).GetNormal();
-                        
-                        double angleRad = vIn.GetAngleTo(vOut);
-                        double angleDeg = angleRad * (180.0 / Math.PI);
-
-                        if (angleDeg > 1.0) // Ignorer les sommets quasi-alignés
-                        {
-                            // Calcul du retrait (Cutback) pour tronquer le tube
-                            cutbacks[i] = Math.Tan(angleRad / 2.0) * elbowRadiusLR;
-
-                            string blockName = angleDeg > 60.0 ? "KOHLER_ELBOW_90" : "KOHLER_ELBOW_45";
-
-                            if (bt.Has(blockName))
-                            {
-                                InsertElbowBlock(vertices[i], vIn, vOut, blockName, bt, btr, tr);
-                            }
-                            else
-                            {
-                                ed.WriteMessage($"\nAttention: Bloc '{blockName}' introuvable dans le dessin.");
-                            }
-                        }
-                    }
-
-                    // 3. Génération des tubes (Solid3d) tronqués
+                    // 3. Génération des tubes (Solid3d) sans coudes ni retraits
                     for (int i = 0; i < vertices.Count - 1; i++)
                     {
                         Vector3d direction = (vertices[i + 1] - vertices[i]).GetNormal();
-                        Point3d startPt = vertices[i] + direction * cutbacks[i];
-                        Point3d endPt = vertices[i + 1] - direction * cutbacks[i + 1];
+                        Point3d startPt = vertices[i];
+                        Point3d endPt = vertices[i + 1];
 
                         double cutLength = startPt.DistanceTo(endPt);
 
