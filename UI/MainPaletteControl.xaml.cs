@@ -10,6 +10,14 @@ using LogiK3D.Piping;
 
 namespace LogiK3D.UI
 {
+    public class LineInfo
+    {
+        public string LineNumber { get; set; }
+        public string Spec { get; set; }
+        public string DN { get; set; }
+        public ObjectId PolylineId { get; set; }
+    }
+
     public partial class MainPaletteControl : UserControl
     {
         // Instance active pour accès depuis les commandes
@@ -25,6 +33,7 @@ namespace LogiK3D.UI
             InitializeComponent();
             Instance = this;
             LoadDiameters();
+            RefreshLineList();
         }
 
         public void SetCurrentDN(string dn)
@@ -152,9 +161,100 @@ namespace LogiK3D.UI
             Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             if (doc != null)
             {
-                // On utilise notre propre commande de conversion de polyligne
-                // qui ne nécessite pas d'être dans un projet Plant 3D
                 doc.SendStringToExecute("LOGIK_PIPE ", true, false, false);
+            }
+        }
+
+        private void BtnUpdateLine_Click(object sender, RoutedEventArgs e)
+        {
+            Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (doc != null)
+            {
+                doc.SendStringToExecute("LOGIK_UPDATE_LINE ", true, false, false);
+            }
+        }
+
+        private void BtnRefreshLines_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshLineList();
+        }
+
+        public void RefreshLineList()
+        {
+            try
+            {
+                Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (doc == null) return;
+
+                Database db = doc.Database;
+                List<LineInfo> lines = new List<LineInfo>();
+
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead);
+                    foreach (ObjectId id in btr)
+                    {
+                        if (id.ObjectClass.DxfName == "POLYLINE" || id.ObjectClass.DxfName == "LWPOLYLINE" || id.ObjectClass.DxfName == "POLYLINE3D")
+                        {
+                            Entity ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                            if (ent != null)
+                            {
+                                ResultBuffer rb = ent.GetXDataForApplication(PipeManager.LineDataAppName);
+                                if (rb != null)
+                                {
+                                    TypedValue[] values = rb.AsArray();
+                                    if (values.Length >= 4)
+                                    {
+                                        lines.Add(new LineInfo
+                                        {
+                                            LineNumber = values[1].Value.ToString(),
+                                            Spec = values[2].Value.ToString(),
+                                            DN = values[3].Value.ToString(),
+                                            PolylineId = id
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    tr.Commit();
+                }
+
+                DgLines.ItemsSource = lines;
+            }
+            catch { }
+        }
+
+        private void DgLines_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (DgLines.SelectedItem is LineInfo selectedLine)
+            {
+                // Try to select the spec
+                foreach (var item in CmbSpec.Items)
+                {
+                    if (item.ToString() == selectedLine.Spec)
+                    {
+                        CmbSpec.SelectedItem = item;
+                        break;
+                    }
+                }
+
+                // Try to select the DN
+                SetCurrentDN(selectedLine.DN);
+            }
+        }
+
+        private void BtnSelectLine_Click(object sender, RoutedEventArgs e)
+        {
+            if (DgLines.SelectedItem is LineInfo selectedLine)
+            {
+                Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (doc != null)
+                {
+                    Editor ed = doc.Editor;
+                    ObjectId[] ids = new ObjectId[] { selectedLine.PolylineId };
+                    ed.SetImpliedSelection(ids);
+                }
             }
         }
 
@@ -192,3 +292,9 @@ namespace LogiK3D.UI
         }
     }
 }
+
+
+
+
+
+

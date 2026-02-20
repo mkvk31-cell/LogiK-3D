@@ -48,7 +48,8 @@
             <GroupBox Header="Tracé de Tuyauterie" Grid.Row="1" Margin="0,0,0,10" Padding="5">
                 <StackPanel>
                     <Button x:Name="BtnRoutePipe" Content="Tracer une nouvelle ligne" Height="30" Margin="0,0,0,5" Click="BtnRoutePipe_Click" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
-                    <Button x:Name="BtnConvertPolyline" Content="Convertir une polyligne" Height="30" Click="BtnConvertPolyline_Click"/>
+                    <Button x:Name="BtnConvertPolyline" Content="Convertir une polyligne" Height="30" Margin="0,0,0,5" Click="BtnConvertPolyline_Click"/>
+                    <Button x:Name="BtnUpdateLine" Content="Mettre à jour la ligne" Height="30" Click="BtnUpdateLine_Click"/>
                 </StackPanel>
             </GroupBox>
 
@@ -76,6 +77,26 @@
                     <TextBlock x:Name="TxtInfo" Text="Sélectionnez un objet pour voir ses propriétés." TextWrapping="Wrap" Foreground="DarkGray" Margin="0,5,0,0"/>
                 </StackPanel>
             </GroupBox>
+            <GroupBox Header="Gestion des Lignes" Grid.Row="4" Margin="0,0,0,10" Padding="5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Button x:Name="BtnRefreshLines" Content="Actualiser la liste" Height="25" Margin="0,0,0,5" Click="BtnRefreshLines_Click"/>
+                    <DataGrid x:Name="DgLines" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" SelectionChanged="DgLines_SelectionChanged" HeadersVisibility="Column">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Ligne" Binding="{Binding LineNumber}" Width="*"/>
+                            <DataGridTextColumn Header="Spec" Binding="{Binding Spec}" Width="60"/>
+                            <DataGridTextColumn Header="DN" Binding="{Binding DN}" Width="50"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <Button x:Name="BtnSelectLine" Grid.Row="2" Content="Sélectionner dans le plan" Height="25" Margin="0,5,0,0" Click="BtnSelectLine_Click"/>
+                </Grid>
+            </GroupBox>
         </Grid>
     </ScrollViewer>
 </UserControl>
+
+

@@ -81,6 +81,48 @@ namespace LogiK3D.Piping
             }
         }
 
+        [CommandMethod("LOGIK_UPDATE_LINE")]
+        public void UpdateLine()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+
+            PromptEntityOptions peo = new PromptEntityOptions("\nSélectionnez la ligne à mettre à jour : ");
+            peo.SetRejectMessage("\nVeuillez sélectionner une polyligne.");
+            peo.AddAllowedClass(typeof(Polyline), true);
+            peo.AddAllowedClass(typeof(Polyline3d), true);
+
+            PromptEntityResult per = ed.GetEntity(peo);
+            if (per.Status != PromptStatus.OK) return;
+
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                Entity polyEnt = (Entity)tr.GetObject(per.ObjectId, OpenMode.ForWrite);
+                string lineNumber = "LIGNE_INCONNUE";
+                string baseDN = LogiK3D.UI.MainPaletteControl.CurrentDN;
+                double baseOD = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter;
+                double thickness = LogiK3D.UI.MainPaletteControl.CurrentThickness;
+
+                ResultBuffer rb = polyEnt.GetXDataForApplication(PipeManager.LineDataAppName);
+                if (rb != null)
+                {
+                    TypedValue[] values = rb.AsArray();
+                    if (values.Length >= 2) lineNumber = values[1].Value.ToString();
+                    if (values.Length >= 4) baseDN = values[3].Value.ToString();
+                    if (values.Length >= 5) double.TryParse(values[4].Value.ToString(), out baseOD);
+                    if (values.Length >= 6) double.TryParse(values[5].Value.ToString(), out thickness);
+                }
+
+                PipeManager.UpdateLineComponents(polyEnt, lineNumber, baseDN, tr);
+                PipeManager.DeleteLinkedSolids(polyEnt, tr);
+                PipeManager.GeneratePiping(polyEnt, lineNumber, baseDN, baseOD, thickness, tr);
+
+                tr.Commit();
+                ed.WriteMessage("\nLigne $lineNumber mise à jour avec succès.");
+            }
+        }
+
         [CommandMethod("LOGIK_INSERT_COMP")]
         public void InsertComponent()
         {
@@ -168,6 +210,20 @@ namespace LogiK3D.Piping
                         return; // AnnulÃ©
                     }
 
+                if (isOnPipe && selectedPolyId != ObjectId.Null)
+                {
+                    Curve curve = tr.GetObject(selectedPolyId, OpenMode.ForRead) as Curve;
+                    if (curve != null)
+                    {
+                        double param = curve.GetParameterAtPoint(insertPt);
+                        currentDN = PipeManager.GetActiveDNAtParameter(polyEnt, lineNumber, currentDN, param, tr);
+                        if (LogiK3D.UI.MainPaletteControl.AvailableDiameters != null && LogiK3D.UI.MainPaletteControl.AvailableDiameters.ContainsKey(currentDN))
+                        {
+                            currentOD = LogiK3D.UI.MainPaletteControl.AvailableDiameters[currentDN];
+                        }
+                    }
+                }
+
                 string targetDN = currentDN;
                 double targetOD = currentOD;
 
@@ -230,8 +286,23 @@ namespace LogiK3D.Piping
                     string blockName = $"FLANGE_{currentDN}_{flangeOD}_{flangeThickness}";
                     blockId = generator.GetOrCreateFlange(currentOD, flangeOD, flangeThickness, flangeLength, blockName);
                     sapCode = $"KOH-{currentDN}-FLANGE";
-                    
-                    direction = direction.Negate();
+
+                    if (isOnPipe && selectedPolyId != ObjectId.Null)
+                    {
+                        Curve curve = tr.GetObject(selectedPolyId, OpenMode.ForRead) as Curve;
+                        if (curve != null)
+                        {
+                            double param = curve.GetParameterAtPoint(insertPt);
+                            if (param < curve.EndParam / 2.0)
+                            {
+                                direction = direction.Negate();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        direction = direction.Negate();
+                    }
                 }
                 else if (compType == "COUDE" || compType == "ELBOW_3D" || compType == "ELBOW_5D")
                 {
@@ -762,4 +833,5 @@ namespace LogiK3D.Piping
         }
     }
 }
+
 

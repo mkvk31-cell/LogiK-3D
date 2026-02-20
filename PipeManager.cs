@@ -112,16 +112,15 @@ namespace LogiK3D.Piping
         public ObjectId BlockId { get; set; }
     }
 
-    public static void UpdateLineComponents(Entity poly, string lineNumber, string baseDN, Transaction tr)
+    public static List<InlineComponent> GetLineComponents(Entity poly, string lineNumber, Transaction tr)
     {
+        List<InlineComponent> inlineComps = new List<InlineComponent>();
         Database db = poly.Database;
         Curve polyCurve = poly as Curve;
-        if (polyCurve == null) return;
+        if (polyCurve == null) return inlineComps;
 
-        BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
-        List<InlineComponent> inlineComps = new List<InlineComponent>();
+        BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead);
 
-        // 1. Collect all blocks on the line
         foreach (ObjectId id in btr)
         {
             if (id.ObjectClass.DxfName == "INSERT")
@@ -193,6 +192,19 @@ namespace LogiK3D.Piping
                                         ic.TargetDN = bDN;
                                     }
 
+                                    if (LogiK3D.UI.MainPaletteControl.AvailableDiameters != null && LogiK3D.UI.MainPaletteControl.AvailableDiameters.ContainsKey(ic.TargetDN))
+                                    {
+                                        ic.TargetOD = LogiK3D.UI.MainPaletteControl.AvailableDiameters[ic.TargetDN];
+                                    }
+                                    else
+                                    {
+                                        string dnStr = ic.TargetDN.Replace("DN", "");
+                                        if (double.TryParse(dnStr, out double dnVal))
+                                        {
+                                            ic.TargetOD = dnVal > 50 ? dnVal + 10 : dnVal + 5;
+                                        }
+                                    }
+
                                     inlineComps.Add(ic);
                                 }
                             }
@@ -203,8 +215,42 @@ namespace LogiK3D.Piping
             }
         }
 
-        // 2. Sort components by parameter along the polyline
         inlineComps.Sort((a, b) => a.Param1.CompareTo(b.Param1));
+        return inlineComps;
+    }
+
+    public static string GetActiveDNAtParameter(Entity poly, string lineNumber, string baseDN, double targetParam, Transaction tr)
+    {
+        List<InlineComponent> inlineComps = GetLineComponents(poly, lineNumber, tr);
+        string currentDN = baseDN;
+
+        foreach (var ic in inlineComps)
+        {
+            if (ic.Param1 < targetParam)
+            {
+                bool isReducer = ic.CompType.Contains("REDUCER") || ic.CompType.Contains("RED_CONC") || ic.CompType.Contains("RED_EXC");
+                if (isReducer)
+                {
+                    currentDN = ic.TargetDN;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return currentDN;
+    }
+
+    public static void UpdateLineComponents(Entity poly, string lineNumber, string baseDN, Transaction tr)
+    {
+        Database db = poly.Database;
+        Curve polyCurve = poly as Curve;
+        if (polyCurve == null) return;
+
+        BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+        List<InlineComponent> inlineComps = GetLineComponents(poly, lineNumber, tr);
 
         // 3. Traverse and update DN
         string currentDN = baseDN;
@@ -363,276 +409,195 @@ namespace LogiK3D.Piping
     }
 
     public static void GeneratePiping(Entity poly, string lineNumber, string dn, double od, double thickness, Transaction tr)
+    {
+        Database db = poly.Database;
+
+        // 1. Supprimer les anciens solides li�s � cette polyligne
+        DeleteLinkedSolids(poly, tr);
+
+        // 2. G�n�rer les nouveaux solides
+        List<Point3d> vertices = GetPolylineVertices(poly, tr);
+        if (vertices.Count < 2) return;
+
+        double pipeRadius = od / 2.0;
+        string dnString = dn.Replace("DN", "");
+        double dnValue = 100.0;
+        double.TryParse(dnString, out dnValue);
+        double elbowRadiusLR = 1.5 * dnValue;
+
+        BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+        List<Handle> newSolidHandles = new List<Handle>();
+
+        double[] cutbacks = new double[vertices.Count];
+
+        Curve polyCurve = poly as Curve;
+        List<InlineComponent> inlineComps = GetLineComponents(poly, lineNumber, tr);
+
+        // Coudes
+        PipingGenerator generator = new PipingGenerator();
+        for (int i = 1; i < vertices.Count - 1; i++)
         {
-            Database db = poly.Database;
-            
-            // 1. Supprimer les anciens solides liés à cette polyligne
-            DeleteLinkedSolids(poly, tr);
+            // Calculer l'angle et le cutback
+            Vector3d vIn = (vertices[i] - vertices[i - 1]).GetNormal();
+            Vector3d vOut = (vertices[i + 1] - vertices[i]).GetNormal();
+            double angleRad = vIn.GetAngleTo(vOut);
 
-            // 2. Générer les nouveaux solides
-            List<Point3d> vertices = GetPolylineVertices(poly, tr);
-            if (vertices.Count < 2) return;
-
-            double pipeRadius = od / 2.0;
-            string dnString = dn.Replace("DN", "");
-            double dnValue = 100.0;
-            double.TryParse(dnString, out dnValue);
-            double elbowRadiusLR = 1.5 * dnValue;
-
-            BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
-            List<Handle> newSolidHandles = new List<Handle>();
-
-            double[] cutbacks = new double[vertices.Count];
-            
-            Curve polyCurve = poly as Curve;
-            List<InlineComponent> inlineComps = new List<InlineComponent>();
-            
-            if (polyCurve != null)
+            if (angleRad < 0.01 || angleRad > Math.PI - 0.01)
             {
-                foreach (ObjectId id in btr)
-                {
-                    if (id.ObjectClass.DxfName == "INSERT")
-                    {
-                        BlockReference bref = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
-                        if (bref != null)
-                        {
-                            string bLineNumber = "";
-                            string bCompType = "";
-                            string bTargetDN = "";
-                            string bGrandDN = "";
-                            
-                            foreach (ObjectId attId in bref.AttributeCollection)
-                            {
-                                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForRead) as AttributeReference;
-                                if (attRef != null)
-                                {
-                                    string tag = attRef.Tag.ToUpper();
-                                    if (tag == "NO LIGNE") bLineNumber = attRef.TextString;
-                                    else if (tag == "DESIGNATION") bCompType = attRef.TextString;
-                                    else if (tag == "PETIT DN") bTargetDN = attRef.TextString;
-                                    else if (tag == "GRAND DN") bGrandDN = attRef.TextString;
-                                }
-                            }
-                            
-                            if (bLineNumber == lineNumber && bCompType != "COUDE" && !bCompType.Contains("ELBOW"))
-                            {
-                                List<Point3d> ports = new List<Point3d>();
-                                BlockTableRecord btrBlock = tr.GetObject(bref.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
-                                foreach (ObjectId entId in btrBlock)
-                                {
-                                    Entity bEnt = tr.GetObject(entId, OpenMode.ForRead) as Entity;
-                                    if (bEnt is DBPoint pt)
-                                    {
-                                        ports.Add(pt.Position.TransformBy(bref.BlockTransform));
-                                    }
-                                }
-                                
-                                if (ports.Count >= 2)
-                                {
-                                    try
-                                    {
-                                        Point3d closest1 = polyCurve.GetClosestPointTo(ports[0], false);
-                                        Point3d closest2 = polyCurve.GetClosestPointTo(ports[1], false);
-                                        
-                                        if (closest1.DistanceTo(ports[0]) < 1.0 && closest2.DistanceTo(ports[1]) < 1.0)
-                                        {
-                                            double param1 = polyCurve.GetParameterAtPoint(closest1);
-                                            double param2 = polyCurve.GetParameterAtPoint(closest2);
-                                            
-                                            InlineComponent ic = new InlineComponent
-                                            {
-                                                Param1 = Math.Min(param1, param2),
-                                                Param2 = Math.Max(param1, param2),
-                                                Pt1 = param1 < param2 ? closest1 : closest2,
-                                                Pt2 = param1 < param2 ? closest2 : closest1,
-                                                CompType = bCompType
-                                            };
-                                            
-                                            if (bCompType.Contains("REDUCER") || bCompType.Contains("RED_CONC") || bCompType.Contains("RED_EXC"))
-                                            {
-                                                ic.TargetDN = param1 < param2 ? bTargetDN : bGrandDN;
-                                                
-                                                if (LogiK3D.UI.MainPaletteControl.AvailableDiameters != null && 
-                                                    LogiK3D.UI.MainPaletteControl.AvailableDiameters.ContainsKey(ic.TargetDN))
-                                                {
-                                                    ic.TargetOD = LogiK3D.UI.MainPaletteControl.AvailableDiameters[ic.TargetDN];
-                                                }
-                                                else
-                                                {
-                                                    string dnStr = ic.TargetDN.Replace("DN", "");
-                                                    if (double.TryParse(dnStr, out double dnVal))
-                                                    {
-                                                        ic.TargetOD = dnVal > 50 ? dnVal + 10 : dnVal + 5;
-                                                    }
-                                                }
-                                            }
-                                            
-                                            // Les brides sont deja inserees comme des blocs separes.
-                                            
-                                            inlineComps.Add(ic);
-                                        }
-                                    }
-                                    catch { }
-                                }
-                            }
-                        }
-                    }
-                }
-                inlineComps.Sort((a, b) => a.Param1.CompareTo(b.Param1));
+                cutbacks[i] = 0;
+                continue;
             }
 
-            // Coudes
-              PipingGenerator generator = new PipingGenerator();
-              for (int i = 1; i < vertices.Count - 1; i++)
-              {
-                  // Calculer l'angle et le cutback
-                  Vector3d vIn = (vertices[i] - vertices[i - 1]).GetNormal();
-                  Vector3d vOut = (vertices[i + 1] - vertices[i]).GetNormal();
-                  double angleRad = vIn.GetAngleTo(vOut);
-                  
-                  if (angleRad < 0.01 || angleRad > Math.PI - 0.01)
-                  {
-                      cutbacks[i] = 0;
-                      continue;
-                  }
+            double angleDeg = angleRad * 180.0 / Math.PI;
 
-                  double angleDeg = angleRad * 180.0 / Math.PI;
-                  double cutback = elbowRadiusLR * Math.Tan(angleRad / 2.0);
-                  cutbacks[i] = cutback;
+            // Determine active DN at this vertex
+            string vertexDN = dn;
+            double vertexOD = od;
+            double vertexDNValue = dnValue;
 
-                  // Créer le bloc coude
-                  string blockName = $"ELBOW_{Math.Round(angleDeg)}_{dn}_{elbowRadiusLR}";
-                  ObjectId elbowBlockId = generator.GetOrCreateElbow(od, elbowRadiusLR, angleDeg, blockName);
-
-                  if (elbowBlockId != ObjectId.Null)
-                  {
-                      // Le point d'insertion du bloc est le début du coude (après le cutback)
-                      Point3d insertPt = vertices[i] - vIn * cutback;
-                      BlockReference bref = new BlockReference(insertPt, elbowBlockId);
-                      
-                      // Aligner le bloc pour que son axe X corresponde à vIn
-                      Vector3d xAxis = Vector3d.XAxis;
-                      double angle = xAxis.GetAngleTo(vIn);
-                      Vector3d axisOfRotation = xAxis.CrossProduct(vIn);
-
-                      if (!axisOfRotation.IsZeroLength())
-                      {
-                          bref.TransformBy(Matrix3d.Rotation(angle, axisOfRotation, insertPt));
-                      }
-                      else if (vIn.X < 0)
-                      {
-                          bref.TransformBy(Matrix3d.Rotation(Math.PI, Vector3d.ZAxis, insertPt));
-                      }
-                      
-                      // Aligner le plan du coude avec vOut
-                      Vector3d currentYAxis = bref.BlockTransform.CoordinateSystem3d.Yaxis;
-                      Vector3d targetYAxis = (vOut - vIn * vOut.DotProduct(vIn)).GetNormal();
-                      
-                      if (!targetYAxis.IsZeroLength())
-                      {
-                          Plane plane = new Plane(Point3d.Origin, vIn);
-                          double currentAngle = currentYAxis.AngleOnPlane(plane);
-                          double targetAngle = targetYAxis.AngleOnPlane(plane);
-                          bref.TransformBy(Matrix3d.Rotation(targetAngle - currentAngle, vIn, insertPt));
-                      }
-
-                      // Renseigner les attributs
-                      var attributes = new System.Collections.Generic.Dictionary<string, string>
-                      {
-                          { "POSITION", "" },
-                          { "DESIGNATION", "COUDE" },
-                          { "DN", dn },
-                          { "PN", "PN16" },
-                          { "ID", $"KOH-{dn}-ELBOW" },
-                          { "NO LIGNE", lineNumber }
-                      };
-
-                      btr.AppendEntity(bref);
-                      tr.AddNewlyCreatedDBObject(bref, true);
-                      newSolidHandles.Add(bref.Handle);
-
-                      BlockTableRecord btrBlock = (BlockTableRecord)tr.GetObject(elbowBlockId, OpenMode.ForRead);
-                      foreach (ObjectId entId in btrBlock)
-                      {
-                          Entity ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
-                          if (ent is AttributeDefinition attrDef)
-                          {
-                              AttributeReference attrRef = new AttributeReference();
-                              attrRef.SetAttributeFromBlock(attrDef, bref.BlockTransform);
-
-                              if (attributes.ContainsKey(attrDef.Tag.ToUpper()))
-                              {
-                                  attrRef.TextString = attributes[attrDef.Tag.ToUpper()];
-                              }
-
-                              bref.AttributeCollection.AppendAttribute(attrRef);
-                              tr.AddNewlyCreatedDBObject(attrRef, true);
-                          }
-                      }
-                  }
-              }
-
-            double currentPipeRadius = pipeRadius;
-            string currentPipeDN = dn;
-            double currentPipeDNValue = dnValue;
-
-            // Tubes droits
-            for (int i = 0; i < vertices.Count - 1; i++)
+            if (polyCurve != null)
             {
-                Vector3d direction = (vertices[i + 1] - vertices[i]).GetNormal();
-                Point3d startPt = vertices[i] + direction * cutbacks[i];
-                Point3d endPt = vertices[i + 1] - direction * cutbacks[i + 1];
-
-                double paramStart = polyCurve != null ? polyCurve.GetParameterAtPoint(polyCurve.GetClosestPointTo(startPt, false)) : i;
-                double paramEnd = polyCurve != null ? polyCurve.GetParameterAtPoint(polyCurve.GetClosestPointTo(endPt, false)) : i + 1;
-
-                List<InlineComponent> segmentComps = new List<InlineComponent>();
+                double paramVertex = polyCurve.GetParameterAtPoint(polyCurve.GetClosestPointTo(vertices[i], false));
                 foreach (var ic in inlineComps)
                 {
-                    if (ic.Param1 >= paramStart - 0.01 && ic.Param2 <= paramEnd + 0.01)
+                    if (ic.Param1 < paramVertex)
                     {
-                        segmentComps.Add(ic);
+                        bool isReducer = ic.CompType.Contains("REDUCER") || ic.CompType.Contains("RED_CONC") || ic.CompType.Contains("RED_EXC");
+                        if (isReducer)
+                        {
+                            vertexDN = ic.TargetDN;
+                            vertexOD = ic.TargetOD;
+                            double.TryParse(vertexDN.Replace("DN", ""), out vertexDNValue);
+                        }
+                    }
+                    else
+                    {
+                        break;
                     }
                 }
+            }
 
-                Point3d currentPt = startPt;
+            double vertexElbowRadiusLR = 1.5 * vertexDNValue;
+            double cutback = vertexElbowRadiusLR * Math.Tan(angleRad / 2.0);
+            cutbacks[i] = cutback;
 
-                foreach (var ic in segmentComps)
+            // Cr�er le bloc coude
+            string blockName = "ELBOW_$Math.Round(angleDeg)_$vertexDN_$vertexElbowRadiusLR";
+            ObjectId elbowBlockId = generator.GetOrCreateElbow(vertexOD, vertexElbowRadiusLR, angleDeg, blockName);
+
+            if (elbowBlockId != ObjectId.Null)
+            {
+                // Le point d'insertion du bloc est le d�but du coude (apr�s le cutback)
+                Point3d insertPt = vertices[i] - vIn * cutback;
+                BlockReference bref = new BlockReference(insertPt, elbowBlockId);
+
+                // Aligner le bloc pour que son axe X corresponde � vIn
+                Vector3d xAxis = Vector3d.XAxis;
+                double angle = xAxis.GetAngleTo(vIn);
+                Vector3d axisOfRotation = xAxis.CrossProduct(vIn);
+                if (axisOfRotation.IsZeroLength())
                 {
-                    double cutLength = currentPt.DistanceTo(ic.Pt1);
-                    if (cutLength > 0.1)
-                    {
-                        Solid3d pipeSolid = CreatePipeSolid(currentPt, ic.Pt1, currentPipeRadius, thickness);
-                        AttachSolidData(pipeSolid, $"KOH-{currentPipeDN}-PIPE", cutLength, lineNumber, "PIPE", currentPipeDNValue, currentPt, ic.Pt1, Point3d.Origin, tr, db);
-                        btr.AppendEntity(pipeSolid);
-                        tr.AddNewlyCreatedDBObject(pipeSolid, true);
-                        newSolidHandles.Add(pipeSolid.Handle);
-                    }
+                    axisOfRotation = Vector3d.ZAxis;
+                }
+                bref.TransformBy(Matrix3d.Rotation(angle, axisOfRotation, insertPt));
 
-                    currentPt = ic.Pt2;
-
-                    if (ic.TargetOD > 0)
-                    {
-                        currentPipeRadius = ic.TargetOD / 2.0;
-                        currentPipeDN = ic.TargetDN;
-                        double.TryParse(currentPipeDN.Replace("DN", ""), out currentPipeDNValue);
-                    }
+                // Aligner l'axe Y du bloc avec le plan du coude
+                Vector3d normal = vIn.CrossProduct(vOut).GetNormal();
+                Vector3d currentYAxis = Vector3d.YAxis.TransformBy(bref.BlockTransform);
+                double angleY = currentYAxis.GetAngleTo(normal);
+                Vector3d axisOfRotationY = currentYAxis.CrossProduct(normal);
+                if (!axisOfRotationY.IsZeroLength())
+                {
+                    bref.TransformBy(Matrix3d.Rotation(angleY, axisOfRotationY, insertPt));
                 }
 
-                double finalCutLength = currentPt.DistanceTo(endPt);
-                if (finalCutLength > 0.1)
+                btr.AppendEntity(bref);
+                tr.AddNewlyCreatedDBObject(bref, true);
+
+                // Ajouter les attributs
+                BlockTableRecord btrBlock = (BlockTableRecord)tr.GetObject(elbowBlockId, OpenMode.ForRead);
+                foreach (ObjectId entId in btrBlock)
                 {
-                    Solid3d pipeSolid = CreatePipeSolid(currentPt, endPt, currentPipeRadius, thickness);
-                    AttachSolidData(pipeSolid, $"KOH-{currentPipeDN}-PIPE", finalCutLength, lineNumber, "PIPE", currentPipeDNValue, currentPt, endPt, Point3d.Origin, tr, db);
+                    Entity ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                    if (ent is AttributeDefinition attrDef)
+                    {
+                        AttributeReference attrRef = new AttributeReference();
+                        attrRef.SetAttributeFromBlock(attrDef, bref.BlockTransform);
+
+                        if (attrDef.Tag.ToUpper() == "NO LIGNE") attrRef.TextString = lineNumber;
+                        else if (attrDef.Tag.ToUpper() == "DESIGNATION") attrRef.TextString = "COUDE";
+                        else if (attrDef.Tag.ToUpper() == "DN") attrRef.TextString = vertexDN;
+                        else if (attrDef.Tag.ToUpper() == "ID") attrRef.TextString = $"KOH-{vertexDN}-ELBOW";
+
+                        bref.AttributeCollection.AppendAttribute(attrRef);
+                        tr.AddNewlyCreatedDBObject(attrRef, true);
+                    }
+                }
+            }
+        }
+
+        double currentPipeRadius = pipeRadius;
+        string currentPipeDN = dn;
+        double currentPipeDNValue = dnValue;
+
+        // Tubes droits
+        for (int i = 0; i < vertices.Count - 1; i++)
+        {
+            Vector3d direction = (vertices[i + 1] - vertices[i]).GetNormal();
+            Point3d startPt = vertices[i] + direction * cutbacks[i];
+            Point3d endPt = vertices[i + 1] - direction * cutbacks[i + 1];
+
+            double paramStart = polyCurve != null ? polyCurve.GetParameterAtPoint(polyCurve.GetClosestPointTo(startPt, false)) : i;
+            double paramEnd = polyCurve != null ? polyCurve.GetParameterAtPoint(polyCurve.GetClosestPointTo(endPt, false)) : i + 1;
+
+            List<InlineComponent> segmentComps = new List<InlineComponent>();
+            foreach (var ic in inlineComps)
+            {
+                if (ic.Param1 >= paramStart - 0.01 && ic.Param2 <= paramEnd + 0.01)
+                {
+                    segmentComps.Add(ic);
+                }
+            }
+
+            Point3d currentPt = startPt;
+
+            foreach (var ic in segmentComps)
+            {
+                double cutLength = currentPt.DistanceTo(ic.Pt1);
+                if (cutLength > 0.1)
+                {
+                    Solid3d pipeSolid = CreatePipeSolid(currentPt, ic.Pt1, currentPipeRadius, thickness);
+                    AttachSolidData(pipeSolid, $"KOH-{currentPipeDN}-PIPE", cutLength, lineNumber, "PIPE", currentPipeDNValue, currentPt, ic.Pt1, Point3d.Origin, tr, db);
                     btr.AppendEntity(pipeSolid);
                     tr.AddNewlyCreatedDBObject(pipeSolid, true);
                     newSolidHandles.Add(pipeSolid.Handle);
                 }
+
+                currentPt = ic.Pt2;
+
+                bool isReducer = ic.CompType.Contains("REDUCER") || ic.CompType.Contains("RED_CONC") || ic.CompType.Contains("RED_EXC");
+                if (isReducer && ic.TargetOD > 0)
+                {
+                    currentPipeRadius = ic.TargetOD / 2.0;
+                    currentPipeDN = ic.TargetDN;
+                    double.TryParse(currentPipeDN.Replace("DN", ""), out currentPipeDNValue);
+                }
+            }
+
+            double finalCutLength = currentPt.DistanceTo(endPt);
+            if (finalCutLength > 0.1)
+            {
+                Solid3d pipeSolid = CreatePipeSolid(currentPt, endPt, currentPipeRadius, thickness);
+                AttachSolidData(pipeSolid, $"KOH-{currentPipeDN}-PIPE", finalCutLength, lineNumber, "PIPE", currentPipeDNValue, currentPt, endPt, Point3d.Origin, tr, db);
+                btr.AppendEntity(pipeSolid);
+                tr.AddNewlyCreatedDBObject(pipeSolid, true);
+                newSolidHandles.Add(pipeSolid.Handle);
             }
 
             // 3. Sauvegarder les handles des nouveaux solides dans le dictionnaire de la polyligne
             SaveLinkedSolids(poly, newSolidHandles, tr);
         }
+    }
 
         public static void DeleteLinkedSolids(Entity poly, Transaction tr)
         {
@@ -877,6 +842,9 @@ namespace LogiK3D.Piping
         }
     }
 }
+
+
+
 
 
 
