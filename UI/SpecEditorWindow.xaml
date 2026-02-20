@@ -1,0 +1,84 @@
+<Window x:Class="LogiK3D.UI.SpecEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Éditeur de Spécifications LogiK 3D" Height="600" Width="900"
+        WindowStartupLocation="CenterScreen" Background="#F5F5F5">
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="10"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Liste des Specs -->
+        <GroupBox Header="Spécifications" Grid.Column="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <ListBox x:Name="LstSpecs" Margin="0,0,0,10" SelectionChanged="LstSpecs_SelectionChanged" DisplayMemberPath="Name"/>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="Ajouter" Width="70" Margin="0,0,5,0" Click="BtnAddSpec_Click"/>
+                    <Button Content="Importer PDF" Width="80" Margin="0,0,5,0" Click="BtnImportPdf_Click"/>
+                    <Button Content="Supprimer" Width="70" Click="BtnDeleteSpec_Click"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center"/>
+
+        <!-- Détails de la Spec sélectionnée -->
+        <GroupBox Header="Détails et Composants" Grid.Column="2">
+            <Grid Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Infos générales -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Nom :" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtSpecName" Grid.Column="1" Margin="0,0,0,5" TextChanged="TxtSpecField_TextChanged"/>
+
+                        <TextBlock Text="Description :" Grid.Row="1" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtSpecDesc" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5" TextChanged="TxtSpecField_TextChanged"/>
+
+                        <TextBlock Text="Matériau :" Grid.Row="2" Margin="0,0,10,5" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtSpecMat" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5" TextChanged="TxtSpecField_TextChanged"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Grille des composants -->
+                <DataGrid x:Name="GridComponents" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Margin="0,0,0,10">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Type (PIPE, ELBOW...)" Binding="{Binding Type}" Width="120"/>
+                        <DataGridTextColumn Header="DN" Binding="{Binding DN}" Width="60"/>
+                        <DataGridTextColumn Header="Diam. Ext (OD)" Binding="{Binding OuterDiameter}" Width="100"/>
+                        <DataGridTextColumn Header="Épaisseur" Binding="{Binding Thickness}" Width="80"/>
+                        <DataGridTextColumn Header="Schedule" Binding="{Binding Schedule}" Width="80"/>
+                        <DataGridTextColumn Header="Code SAP" Binding="{Binding SAPCode}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Boutons de sauvegarde -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Annuler" Width="100" Margin="0,0,10,0" Click="BtnCancel_Click"/>
+                    <Button Content="Enregistrer" Width="100" Background="#28A745" Foreground="White" FontWeight="Bold" Click="BtnSave_Click"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+    </Grid>
+</Window>

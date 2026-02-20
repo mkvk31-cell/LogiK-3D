@@ -50,11 +50,6 @@ namespace LogiK3D.UI
                 {"DN600 (610.0 mm)", 610.0}
             };
 
-            // Exemple d'utilisation de SpecReader (à adapter avec le chemin réel de la spec)
-            // string specPath = @"C:\AutoCAD Plant 3D 2026 Content\CPak DIN\DIN.pspx";
-            // double od = SpecReader.GetPipeOuterDiameter(specPath, "100");
-            // if (od > 0) { /* utiliser od */ }
-
             foreach (var kvp in diameters)
             {
                 ComboBoxItem item = new ComboBoxItem();
@@ -67,6 +62,39 @@ namespace LogiK3D.UI
                 {
                     CmbDiameter.SelectedItem = item;
                 }
+            }
+
+            LoadSpecs();
+        }
+
+        private void LoadSpecs()
+        {
+            CmbSpec.Items.Clear();
+            var specs = LogiK3D.Specs.SpecManager.LoadSpecs();
+            foreach (var spec in specs)
+            {
+                ComboBoxItem item = new ComboBoxItem();
+                item.Content = spec.Name;
+                item.Tag = spec;
+                CmbSpec.Items.Add(item);
+            }
+            if (CmbSpec.Items.Count > 0)
+            {
+                CmbSpec.SelectedIndex = 0;
+            }
+        }
+
+        private void CmbSpec_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Logique pour mettre à jour les diamètres/épaisseurs disponibles en fonction de la spec
+        }
+
+        private void BtnManageSpecs_Click(object sender, RoutedEventArgs e)
+        {
+            SpecEditorWindow editor = new SpecEditorWindow();
+            if (editor.ShowDialog() == true)
+            {
+                LoadSpecs(); // Recharger les specs si elles ont été modifiées
             }
         }
 

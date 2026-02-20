@@ -23,6 +23,8 @@
     <!-- Package NuGet officiel d'AutoCAD (Version 24.3 = AutoCAD 2024) -->
     <!-- ExcludeAssets="runtime" empêche de copier les lourdes DLLs d'AutoCAD dans votre dossier de compilation -->
     <PackageReference Include="AutoCAD.NET" Version="24.3.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="PdfPig" Version="0.1.13" />
     <PackageReference Include="PresentationFramework" Version="4.6.0" />
   </ItemGroup>
 
