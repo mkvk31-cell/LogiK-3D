@@ -24,6 +24,14 @@
                         <!-- Rempli dynamiquement dans le code-behind -->
                     </ComboBox>
 
+                    <TextBlock Text="Épaisseur (Schedule):" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="CmbThickness" Margin="0,0,0,10" SelectionChanged="CmbThickness_SelectionChanged">
+                        <ComboBoxItem Content="Sch 10 (2.0 mm)" Tag="2.0"/>
+                        <ComboBoxItem Content="Sch 40 (3.2 mm)" Tag="3.2" IsSelected="True"/>
+                        <ComboBoxItem Content="Sch 80 (4.5 mm)" Tag="4.5"/>
+                        <ComboBoxItem Content="Sch 160 (7.1 mm)" Tag="7.1"/>
+                    </ComboBox>
+
                     <TextBlock Text="Spécification (Spec):" Margin="0,0,0,5"/>
                     <ComboBox x:Name="CmbSpec" SelectedIndex="0" Margin="0,0,0,10">
                         <ComboBoxItem Content="CS150 (Acier Carbone)"/>

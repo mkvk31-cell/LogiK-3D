@@ -44,40 +44,62 @@ namespace LogiK3D.Piping
                     writer.WriteLine("UNITS-CO-ORDS MM");
                     writer.WriteLine("UNITS-WEIGHT KGS");
                     writer.WriteLine("");
-
                     using (Transaction tr = db.TransactionManager.StartTransaction())
                     {
+                        // Grouper les composants par numéro de ligne
+                        var lineGroups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<Entity>>();
+
                         foreach (SelectedObject so in psr.Value)
                         {
                             Entity ent = tr.GetObject(so.ObjectId, OpenMode.ForRead) as Entity;
-                            if (ent is Solid3d solid)
+                            if (ent is Solid3d solid && ent.XData != null)
                             {
-                                // Extraction des données XData
-                                string sapCode = "UNKNOWN";
-                                double length = 0;
-                                
-                                if (ent.XData != null)
+                                TypedValue[] tvs = ent.XData.AsArray();
+                                if (tvs.Length >= 10 && tvs[0].Value.ToString() == "LogiK_Data")
                                 {
-                                    TypedValue[] tvs = ent.XData.AsArray();
-                                    foreach (TypedValue tv in tvs)
-                                    {
-                                        if (tv.TypeCode == (int)DxfCode.ExtendedDataAsciiString && tv.Value.ToString().StartsWith("KOH-"))
-                                            sapCode = tv.Value.ToString();
-                                        if (tv.TypeCode == (int)DxfCode.ExtendedDataReal)
-                                            length = (double)tv.Value;
-                                    }
+                                    string lineNumber = tvs[4].Value.ToString();
+                                    if (!lineGroups.ContainsKey(lineNumber))
+                                        lineGroups[lineNumber] = new System.Collections.Generic.List<Entity>();
+                                    lineGroups[lineNumber].Add(ent);
                                 }
+                            }
+                        }
 
-                                // Approximation des points de départ et d'arrivée basée sur la BoundingBox
-                                // (Dans une version avancée, on stockerait les points exacts dans les XData)
-                                Point3d min = solid.GeometricExtents.MinPoint;
-                                Point3d max = solid.GeometricExtents.MaxPoint;
+                        foreach (var group in lineGroups)
+                        {
+                            writer.WriteLine($"PIPELINE-REFERENCE {group.Key}");
+                            writer.WriteLine("");
 
-                                writer.WriteLine("PIPE");
-                                writer.WriteLine($"    END-POINT {min.X:F2} {min.Y:F2} {min.Z:F2} {LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter}");
-                                writer.WriteLine($"    END-POINT {max.X:F2} {max.Y:F2} {max.Z:F2} {LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter}");
-                                writer.WriteLine($"    ITEM-CODE {sapCode}");
-                                writer.WriteLine($"    FABRICATION-ITEM");
+                            foreach (Entity ent in group.Value)
+                            {
+                                TypedValue[] tvs = ent.XData.AsArray();
+                                string sapCode = tvs[2].Value.ToString();
+                                double length = (double)tvs[3].Value;
+                                string compType = tvs[5].Value.ToString();
+                                double dnValue = (double)tvs[6].Value;
+                                Point3d p1 = (Point3d)tvs[7].Value;
+                                Point3d p2 = (Point3d)tvs[8].Value;
+                                Point3d p3 = (Point3d)tvs[9].Value;
+
+                                if (compType == "PIPE")
+                                {
+                                    writer.WriteLine("PIPE");
+                                    writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
+                                    writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
+                                    writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                    writer.WriteLine($"    SKEY PBFL");
+                                    writer.WriteLine($"    FABRICATION-ITEM");
+                                }
+                                else if (compType == "ELBOW")
+                                {
+                                    writer.WriteLine("ELBOW");
+                                    writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
+                                    writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
+                                    writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    CENTRE-POINT {0:F4} {1:F4} {2:F4}", p3.X, p3.Y, p3.Z));
+                                    writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                    writer.WriteLine($"    SKEY ELBW");
+                                    writer.WriteLine($"    FABRICATION-ITEM");
+                                }
                             }
                         }
                         tr.Commit();

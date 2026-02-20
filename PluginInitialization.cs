@@ -15,6 +15,9 @@ namespace LogiK3D
         {
             // Ce code s'exécute au chargement de la DLL (netload)
             Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nLogiK 3D chargé avec succès. Tapez LOGIK_PALETTE pour ouvrir l'interface.\n");
+            
+            // Démarrer le réacteur pour la mise à jour dynamique des tuyaux
+            LogiK3D.Piping.PipeManager.StartReactor();
         }
 
         public void Terminate()

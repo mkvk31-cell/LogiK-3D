@@ -15,6 +15,7 @@ namespace LogiK3D.UI
         // Propriétés statiques pour partager les données avec les commandes
         public static double CurrentOuterDiameter { get; private set; } = 114.3;
         public static string CurrentDN { get; private set; } = "DN100";
+        public static double CurrentThickness { get; private set; } = 3.2;
 
         public MainPaletteControl()
         {
@@ -75,6 +76,17 @@ namespace LogiK3D.UI
             {
                 CurrentOuterDiameter = (double)item.Tag;
                 CurrentDN = item.Content.ToString().Split(' ')[0];
+            }
+        }
+
+        private void CmbThickness_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbThickness != null && CmbThickness.SelectedItem is ComboBoxItem item)
+            {
+                if (double.TryParse(item.Tag.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double thickness))
+                {
+                    CurrentThickness = thickness;
+                }
             }
         }
 

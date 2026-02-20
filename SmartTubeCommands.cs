@@ -20,26 +20,36 @@ namespace LogiK3D.Piping
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
+            // Demander le numéro de ligne
+            PromptResult prLine = ed.GetString("\nEntrez le numéro de la ligne (ex: L100) : ");
+            if (prLine.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(prLine.StringResult))
+            {
+                ed.WriteMessage("\nNuméro de ligne invalide. Commande annulée.");
+                return;
+            }
+            string lineNumber = prLine.StringResult;
+
             // Récupérer les paramètres depuis la palette
             double currentOD = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter;
-            double pipeRadius = currentOD / 2.0;
-            
-            // Extraire la valeur numérique du DN (ex: "DN100" -> 100)
-            string dnString = LogiK3D.UI.MainPaletteControl.CurrentDN.Replace("DN", "");
-            double dnValue = 100.0;
-            double.TryParse(dnString, out dnValue);
-            
-            // Rayon standard 1.5D pour les coudes
-            double elbowRadiusLR = 1.5 * dnValue;
+            string currentDN = LogiK3D.UI.MainPaletteControl.CurrentDN;
+            double currentThickness = LogiK3D.UI.MainPaletteControl.CurrentThickness;
 
-            // 1. Sélection de la polyligne
-            PromptEntityOptions peo = new PromptEntityOptions("\nSélectionnez l'axe du tube (Polyligne ou Polyligne 3D) : ");
-            peo.SetRejectMessage("\nL'objet doit être une polyligne.");
-            peo.AddAllowedClass(typeof(Polyline), exactMatch: false);
-            peo.AddAllowedClass(typeof(Polyline3d), exactMatch: false);
+            // 1. Sélection des polylignes
+            PromptSelectionOptions pso = new PromptSelectionOptions();
+            pso.MessageForAdding = "\nSélectionnez les axes des tubes (Polylignes ou Polylignes 3D) : ";
+            
+            // Filtre pour ne sélectionner que les polylignes
+            TypedValue[] filterList = new TypedValue[] {
+                new TypedValue((int)DxfCode.Operator, "<OR"),
+                new TypedValue((int)DxfCode.Start, "POLYLINE"),
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE"),
+                new TypedValue((int)DxfCode.Start, "POLYLINE3D"),
+                new TypedValue((int)DxfCode.Operator, "OR>")
+            };
+            SelectionFilter filter = new SelectionFilter(filterList);
 
-            PromptEntityResult per = ed.GetEntity(peo);
-            if (per.Status != PromptStatus.OK)
+            PromptSelectionResult psr = ed.GetSelection(pso, filter);
+            if (psr.Status != PromptStatus.OK)
             {
                 ed.WriteMessage("\nCommande annulée ou sélection vide.");
                 return;
@@ -49,63 +59,19 @@ namespace LogiK3D.Piping
             {
                 try
                 {
-                    Entity ent = (Entity)tr.GetObject(per.ObjectId, OpenMode.ForRead);
-                    List<Point3d> vertices = GetPolylineVertices(ent, tr);
-
-                    if (vertices.Count < 2)
+                    foreach (SelectedObject so in psr.Value)
                     {
-                        ed.WriteMessage("\nLa polyligne doit contenir au moins 2 sommets.");
-                        return;
-                    }
-
-                    EnsureRegAppExists(db, tr, AppName);
-
-                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
-
-                    double[] cutbacks = new double[vertices.Count];
-                    
-                    // 2. Calcul des angles et création des coudes (Solid3d)
-                    for (int i = 1; i < vertices.Count - 1; i++)
-                    {
-                        Solid3d elbowSolid = CreateElbowSolid(vertices[i - 1], vertices[i], vertices[i + 1], pipeRadius, elbowRadiusLR, out double cutback);
+                        Entity ent = (Entity)tr.GetObject(so.ObjectId, OpenMode.ForWrite);
                         
-                        if (elbowSolid != null)
-                        {
-                            cutbacks[i] = cutback;
-                            elbowSolid.ColorIndex = 4; // Cyan pour les coudes
-                            
-                            // Ajout des XData pour le coude
-                            AttachLogiKData(elbowSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-ELBOW", elbowRadiusLR);
+                        // Attacher les données de ligne à la polyligne
+                        PipeManager.AttachLineData(ent, lineNumber, currentDN, currentOD, currentThickness, tr, db);
 
-                            btr.AppendEntity(elbowSolid);
-                            tr.AddNewlyCreatedDBObject(elbowSolid, true);
-                        }
-                    }
-
-                    // 3. Génération des tubes (Solid3d) tronqués
-                    for (int i = 0; i < vertices.Count - 1; i++)
-                    {
-                        Vector3d direction = (vertices[i + 1] - vertices[i]).GetNormal();
-                        Point3d startPt = vertices[i] + direction * cutbacks[i];
-                        Point3d endPt = vertices[i + 1] - direction * cutbacks[i + 1];
-
-                        double cutLength = startPt.DistanceTo(endPt);
-
-                        if (cutLength > 0)
-                        {
-                            Solid3d pipeSolid = CreatePipeSolid(startPt, endPt, pipeRadius);
-                            
-                            // Ajout des XData
-                            AttachLogiKData(pipeSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-PIPE", cutLength);
-
-                            btr.AppendEntity(pipeSolid);
-                            tr.AddNewlyCreatedDBObject(pipeSolid, true);
-                        }
+                        // Générer la tuyauterie
+                        PipeManager.GeneratePiping(ent, lineNumber, currentDN, currentOD, currentThickness, tr);
                     }
 
                     tr.Commit();
-                    ed.WriteMessage("\nRéseau LogiK 3D généré avec succès.");
+                    ed.WriteMessage($"\nRéseau LogiK 3D (Ligne {lineNumber}) généré avec succès sur {psr.Value.Count} polyligne(s).");
                 }
                 catch (System.Exception ex)
                 {
@@ -123,8 +89,8 @@ namespace LogiK3D.Piping
             Editor ed = doc.Editor;
 
             ed.WriteMessage("\n--- NOMENCLATURE LOGIK 3D (ISO) ---");
-            ed.WriteMessage("\n{0,-20} | {1,-15} | {2,-20}", "Composant", "Longueur (mm)", "Code SAP Kohler");
-            ed.WriteMessage("\n---------------------------------------------------------------");
+            ed.WriteMessage("\n{0,-15} | {1,-20} | {2,-15} | {3,-20}", "Ligne", "Composant", "Longueur (mm)", "Code SAP Kohler");
+            ed.WriteMessage("\n-------------------------------------------------------------------------------");
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -136,157 +102,28 @@ namespace LogiK3D.Piping
                     Entity ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent != null && ent.XData != null)
                     {
-                        ResultBuffer rb = ent.GetXDataForApplication(AppName);
+                        ResultBuffer rb = ent.GetXDataForApplication(PipeManager.SolidDataAppName);
                         if (rb != null)
                         {
                             TypedValue[] values = rb.AsArray();
-                            // Structure attendue : [0] RegApp, [1] GUID, [2] SAP Code, [3] Length
-                            if (values.Length >= 4)
+                            // Structure attendue : [0] RegApp, [1] GUID, [2] SAP Code, [3] Length, [4] Line Number
+                            if (values.Length >= 5)
                             {
                                 string sapCode = values[2].Value.ToString();
                                 double length = (double)values[3].Value;
+                                string lineNumber = values[4].Value.ToString();
 
-                                ed.WriteMessage($"\n{ent.GetType().Name,-20} | {length,-15:F2} | {sapCode,-20}");
+                                ed.WriteMessage($"\n{lineNumber,-15} | {ent.GetType().Name,-20} | {length,-15:F2} | {sapCode,-20}");
                                 count++;
                             }
                         }
                     }
                 }
 
-                ed.WriteMessage("\n---------------------------------------------------------------");
+                ed.WriteMessage("\n-------------------------------------------------------------------------------");
                 ed.WriteMessage($"\nTotal composants trouvés : {count}\n");
                 tr.Commit();
             }
         }
-
-        #region Méthodes Utilitaires
-
-        private List<Point3d> GetPolylineVertices(Entity ent, Transaction tr)
-        {
-            List<Point3d> pts = new List<Point3d>();
-            if (ent is Polyline poly)
-            {
-                for (int i = 0; i < poly.NumberOfVertices; i++)
-                    pts.Add(poly.GetPoint3dAt(i));
-            }
-            else if (ent is Polyline3d poly3d)
-            {
-                foreach (ObjectId vId in poly3d)
-                {
-                    PolylineVertex3d v3d = (PolylineVertex3d)tr.GetObject(vId, OpenMode.ForRead);
-                    pts.Add(v3d.Position);
-                }
-            }
-            return pts;
-        }
-
-        private Solid3d CreatePipeSolid(Point3d startPt, Point3d endPt, double radius)
-        {
-            double length = startPt.DistanceTo(endPt);
-            Vector3d direction = (endPt - startPt).GetNormal();
-            Point3d midPt = startPt + (direction * (length / 2.0));
-
-            Solid3d pipe = new Solid3d();
-            pipe.CreateFrustum(length, radius, radius, radius);
-
-            // Aligner le cylindre (créé par défaut sur l'axe Z) avec la direction du segment
-            Vector3d zAxis = direction;
-            Vector3d xAxis = zAxis.IsParallelTo(Vector3d.XAxis) ? Vector3d.YAxis : zAxis.CrossProduct(Vector3d.XAxis).GetNormal();
-            Vector3d yAxis = zAxis.CrossProduct(xAxis).GetNormal();
-
-            Matrix3d transform = Matrix3d.AlignCoordinateSystem(
-                Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
-                midPt, xAxis, yAxis, zAxis);
-
-            pipe.TransformBy(transform);
-            return pipe;
-        }
-
-        private Solid3d CreateElbowSolid(Point3d p1, Point3d p2, Point3d p3, double pipeRadius, double elbowRadius, out double cutback)
-        {
-            Vector3d vIn = (p2 - p1).GetNormal();
-            Vector3d vOut = (p3 - p2).GetNormal();
-            
-            double angleRad = vIn.GetAngleTo(vOut);
-            if (angleRad < 0.01 || angleRad > Math.PI - 0.01) 
-            {
-                cutback = 0;
-                return null; // Trop droit ou replié sur lui-même
-            }
-            
-            // Calcul du retrait (cutback)
-            cutback = elbowRadius * Math.Tan(angleRad / 2.0);
-            
-            Point3d ptA = p2 - vIn * cutback;
-            Point3d ptB = p2 + vOut * cutback;
-            
-            // Normale du plan formé par les deux segments
-            Vector3d normal = vIn.CrossProduct(vOut).GetNormal();
-            
-            // Direction vers le centre de l'arc
-            Vector3d dirToCenter = vIn.RotateBy(Math.PI / 2.0, normal);
-            Point3d center = ptA + dirToCenter * elbowRadius;
-            
-            Vector3d vecCA = ptA - center;
-            Vector3d vecCB = ptB - center;
-            
-            Plane plane = new Plane(center, normal);
-            double startAngle = vecCA.AngleOnPlane(plane);
-            double endAngle = vecCB.AngleOnPlane(plane);
-            
-            try
-            {
-                using (Arc arc = new Arc(center, normal, elbowRadius, startAngle, endAngle))
-                using (Circle circle = new Circle(ptA, vIn, pipeRadius))
-                {
-                    DBObjectCollection col = new DBObjectCollection();
-                    col.Add(circle);
-                    DBObjectCollection regions = Region.CreateFromCurves(col);
-                    if (regions.Count == 0) return null;
-                    
-                    Region reg = (Region)regions[0];
-                    
-                    Solid3d elbow = new Solid3d();
-                    SweepOptionsBuilder sob = new SweepOptionsBuilder();
-                    sob.Align = SweepOptionsAlignOption.NoAlignment;
-                    sob.BasePoint = ptA;
-                    
-                    elbow.CreateSweptSolid(reg, arc, sob.ToSweepOptions());
-                    
-                    foreach(DBObject obj in regions) obj.Dispose();
-                    
-                    return elbow;
-                }
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void EnsureRegAppExists(Database db, Transaction tr, string appName)
-        {
-            RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
-            if (!rat.Has(appName))
-            {
-                rat.UpgradeOpen();
-                RegAppTableRecord ratr = new RegAppTableRecord { Name = appName };
-                rat.Add(ratr);
-                tr.AddNewlyCreatedDBObject(ratr, true);
-            }
-        }
-
-        private void AttachLogiKData(Entity ent, string sapCode, double cutLength)
-        {
-            ResultBuffer rb = new ResultBuffer(
-                new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppName),
-                new TypedValue((int)DxfCode.ExtendedDataAsciiString, Guid.NewGuid().ToString()),
-                new TypedValue((int)DxfCode.ExtendedDataAsciiString, sapCode),
-                new TypedValue((int)DxfCode.ExtendedDataReal, cutLength)
-            );
-            ent.XData = rb;
-        }
-
-        #endregion
     }
 }

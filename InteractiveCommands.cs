@@ -55,12 +55,20 @@ namespace LogiK3D.Piping
 
                     // Création d'un cylindre 3D pour le tube
                     double radius = LogiK3D.UI.MainPaletteControl.CurrentOuterDiameter / 2.0;
+                    double thickness = LogiK3D.UI.MainPaletteControl.CurrentThickness;
                     double length = currentPoint.DistanceTo(nextPoint);
 
                     if (length > 0)
                     {
                         Solid3d pipeSolid = new Solid3d();
                         pipeSolid.CreateFrustum(length, radius, radius, radius);
+
+                        if (thickness > 0 && thickness < radius)
+                        {
+                            Solid3d innerPipe = new Solid3d();
+                            innerPipe.CreateFrustum(length + 2.0, radius - thickness, radius - thickness, radius - thickness);
+                            pipeSolid.BooleanOperation(BooleanOperationType.BoolSubtract, innerPipe);
+                        }
 
                         // Positionner et orienter le cylindre
                         Vector3d direction = (nextPoint - currentPoint).GetNormal();
