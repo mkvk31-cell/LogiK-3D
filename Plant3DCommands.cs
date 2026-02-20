@@ -48,14 +48,14 @@ namespace LogiK3D.Piping
                     writer.WriteLine("ISOMETRIC-DEF-FILE");
                     if (isImperial)
                     {
-                        writer.WriteLine("    UNITS-BORE INCH");
-                        writer.WriteLine("    UNITS-CO-ORDS INCH");
+                        writer.WriteLine("UNITS-BORE INCH");
+                        writer.WriteLine("UNITS-CO-ORDS INCH");
                         writer.WriteLine("    UNITS-WEIGHT LBS");
                     }
                     else
                     {
-                        writer.WriteLine("    UNITS-BORE MM");
-                        writer.WriteLine("    UNITS-CO-ORDS MM");
+                        writer.WriteLine("UNITS-BORE MM");
+                        writer.WriteLine("UNITS-CO-ORDS MM");
                         writer.WriteLine("    UNITS-WEIGHT KGS");
                     }
                     writer.WriteLine("");
