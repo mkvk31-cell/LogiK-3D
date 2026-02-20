@@ -115,7 +115,8 @@ namespace LogiK3D.Piping
                                             writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
                                             writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
                                             writer.WriteLine($"    ITEM-CODE {sapCode}");
-                                            writer.WriteLine($"    SKEY PBFL");
+                                            writer.WriteLine($"    ITEM-DESCRIPTION TUBE {dnValue}");
+                                            writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                             writer.WriteLine($"    FABRICATION-ITEM");
                                         }
                                     }
@@ -125,6 +126,8 @@ namespace LogiK3D.Piping
                                     string compType = "INCONNU";
                                     string sapCode = "INCONNU";
                                     string dn = "";
+                                    string grandDn = "";
+                                    string petitDn = "";
                                     
                                     foreach (ObjectId attId in bref.AttributeCollection)
                                     {
@@ -135,12 +138,27 @@ namespace LogiK3D.Piping
                                             if (tag == "DESIGNATION") compType = attRef.TextString;
                                             else if (tag == "ID") sapCode = attRef.TextString;
                                             else if (tag == "DN") dn = attRef.TextString;
+                                            else if (tag == "GRAND DN") grandDn = attRef.TextString;
+                                            else if (tag == "PETIT DN") petitDn = attRef.TextString;
                                         }
                                     }
                                     
                                     double dnValue = 0;
                                     if (dn.StartsWith("DN")) double.TryParse(dn.Substring(2), out dnValue);
                                     else double.TryParse(dn, out dnValue);
+
+                                    double grandDnValue = dnValue;
+                                    double petitDnValue = dnValue;
+                                    if (!string.IsNullOrEmpty(grandDn))
+                                    {
+                                        if (grandDn.StartsWith("DN")) double.TryParse(grandDn.Substring(2), out grandDnValue);
+                                        else double.TryParse(grandDn, out grandDnValue);
+                                    }
+                                    if (!string.IsNullOrEmpty(petitDn))
+                                    {
+                                        if (petitDn.StartsWith("DN")) double.TryParse(petitDn.Substring(2), out petitDnValue);
+                                        else double.TryParse(petitDn, out petitDnValue);
+                                    }
                                     
                                     // Récupérer les points de connexion (ports) depuis la définition du bloc
                                     List<Point3d> ports = new List<Point3d>();
@@ -170,6 +188,8 @@ namespace LogiK3D.Piping
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    CENTRE-POINT {0:F4} {1:F4} {2:F4}", center.X, center.Y, center.Z));
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION COUDE {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                         writer.WriteLine($"    SKEY ELBW");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
@@ -179,6 +199,8 @@ namespace LogiK3D.Piping
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION BRIDE {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                         writer.WriteLine($"    SKEY FLWN");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
@@ -190,15 +212,19 @@ namespace LogiK3D.Piping
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    CENTRE-POINT {0:F4} {1:F4} {2:F4}", center.X, center.Y, center.Z));
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    BRANCH1-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p3.X, p3.Y, p3.Z, dnValue));
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION TE {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                         writer.WriteLine($"    SKEY TEBW");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
                                     else if (compType.Contains("REDUCER") || compType.Contains("RED_CONC") || compType.Contains("RED_EXC"))
                                     {
                                         writer.WriteLine("REDUCER-CONCENTRIC");
-                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
-                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, grandDnValue));
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, petitDnValue));
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION REDUCTION {grandDnValue}x{petitDnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                         writer.WriteLine($"    SKEY RCON");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
@@ -208,7 +234,31 @@ namespace LogiK3D.Piping
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
                                         writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
                                         writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION VANNE {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
                                         writer.WriteLine($"    SKEY VVFL");
+                                        writer.WriteLine($"    FABRICATION-ITEM");
+                                    }
+                                    else if (compType.Contains("FILTRE") || compType.Contains("FILTER"))
+                                    {
+                                        writer.WriteLine("FILTER");
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
+                                        writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION FILTRE {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
+                                        writer.WriteLine($"    SKEY FTYL");
+                                        writer.WriteLine($"    FABRICATION-ITEM");
+                                    }
+                                    else if (compType.Contains("DEBIMETRE") || compType.Contains("FLOWMETER") || compType.Contains("DIAPHRAGM"))
+                                    {
+                                        writer.WriteLine("INSTRUMENT");
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p1.X, p1.Y, p1.Z, dnValue));
+                                        writer.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "    END-POINT {0:F4} {1:F4} {2:F4} {3:0.####}", p2.X, p2.Y, p2.Z, dnValue));
+                                        writer.WriteLine($"    ITEM-CODE {sapCode}");
+                                        writer.WriteLine($"    ITEM-DESCRIPTION INSTRUMENT {dnValue}");
+                                        writer.WriteLine($"    PIPING-SPEC LOGIK3D");
+                                        writer.WriteLine($"    SKEY IIFL");
                                         writer.WriteLine($"    FABRICATION-ITEM");
                                     }
                                 }
