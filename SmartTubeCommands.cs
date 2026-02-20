@@ -63,12 +63,32 @@ namespace LogiK3D.Piping
                     BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
-                    // 3. Génération des tubes (Solid3d) sans coudes ni retraits
+                    double[] cutbacks = new double[vertices.Count];
+                    
+                    // 2. Calcul des angles et création des coudes (Solid3d)
+                    for (int i = 1; i < vertices.Count - 1; i++)
+                    {
+                        Solid3d elbowSolid = CreateElbowSolid(vertices[i - 1], vertices[i], vertices[i + 1], pipeRadius, elbowRadiusLR, out double cutback);
+                        
+                        if (elbowSolid != null)
+                        {
+                            cutbacks[i] = cutback;
+                            elbowSolid.ColorIndex = 4; // Cyan pour les coudes
+                            
+                            // Ajout des XData pour le coude
+                            AttachLogiKData(elbowSolid, $"KOH-{LogiK3D.UI.MainPaletteControl.CurrentDN}-ELBOW", elbowRadiusLR);
+
+                            btr.AppendEntity(elbowSolid);
+                            tr.AddNewlyCreatedDBObject(elbowSolid, true);
+                        }
+                    }
+
+                    // 3. Génération des tubes (Solid3d) tronqués
                     for (int i = 0; i < vertices.Count - 1; i++)
                     {
                         Vector3d direction = (vertices[i + 1] - vertices[i]).GetNormal();
-                        Point3d startPt = vertices[i];
-                        Point3d endPt = vertices[i + 1];
+                        Point3d startPt = vertices[i] + direction * cutbacks[i];
+                        Point3d endPt = vertices[i + 1] - direction * cutbacks[i + 1];
 
                         double cutLength = startPt.DistanceTo(endPt);
 
@@ -182,24 +202,66 @@ namespace LogiK3D.Piping
             return pipe;
         }
 
-        private void InsertElbowBlock(Point3d position, Vector3d vIn, Vector3d vOut, string blockName, BlockTable bt, BlockTableRecord btr, Transaction tr)
+        private Solid3d CreateElbowSolid(Point3d p1, Point3d p2, Point3d p3, double pipeRadius, double elbowRadius, out double cutback)
         {
-            BlockReference br = new BlockReference(position, bt[blockName]);
+            Vector3d vIn = (p2 - p1).GetNormal();
+            Vector3d vOut = (p3 - p2).GetNormal();
             
-            // Calcul du plan du coude pour l'orientation
-            Vector3d normal = vIn.CrossProduct(vOut).GetNormal();
-            if (normal.Length > 0.01)
+            double angleRad = vIn.GetAngleTo(vOut);
+            if (angleRad < 0.01 || angleRad > Math.PI - 0.01) 
             {
-                // Aligne l'axe X du bloc sur le tube entrant, et Z sur la normale du plan
-                Matrix3d blockTransform = Matrix3d.AlignCoordinateSystem(
-                    Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
-                    position, vIn, normal.CrossProduct(vIn).GetNormal(), normal);
-                
-                br.TransformBy(blockTransform);
+                cutback = 0;
+                return null; // Trop droit ou replié sur lui-même
             }
-
-            btr.AppendEntity(br);
-            tr.AddNewlyCreatedDBObject(br, true);
+            
+            // Calcul du retrait (cutback)
+            cutback = elbowRadius * Math.Tan(angleRad / 2.0);
+            
+            Point3d ptA = p2 - vIn * cutback;
+            Point3d ptB = p2 + vOut * cutback;
+            
+            // Normale du plan formé par les deux segments
+            Vector3d normal = vIn.CrossProduct(vOut).GetNormal();
+            
+            // Direction vers le centre de l'arc
+            Vector3d dirToCenter = vIn.RotateBy(Math.PI / 2.0, normal);
+            Point3d center = ptA + dirToCenter * elbowRadius;
+            
+            Vector3d vecCA = ptA - center;
+            Vector3d vecCB = ptB - center;
+            
+            Plane plane = new Plane(center, normal);
+            double startAngle = vecCA.AngleOnPlane(plane);
+            double endAngle = vecCB.AngleOnPlane(plane);
+            
+            try
+            {
+                using (Arc arc = new Arc(center, normal, elbowRadius, startAngle, endAngle))
+                using (Circle circle = new Circle(ptA, vIn, pipeRadius))
+                {
+                    DBObjectCollection col = new DBObjectCollection();
+                    col.Add(circle);
+                    DBObjectCollection regions = Region.CreateFromCurves(col);
+                    if (regions.Count == 0) return null;
+                    
+                    Region reg = (Region)regions[0];
+                    
+                    Solid3d elbow = new Solid3d();
+                    SweepOptionsBuilder sob = new SweepOptionsBuilder();
+                    sob.Align = SweepOptionsAlignOption.NoAlignment;
+                    sob.BasePoint = ptA;
+                    
+                    elbow.CreateSweptSolid(reg, arc, sob.ToSweepOptions());
+                    
+                    foreach(DBObject obj in regions) obj.Dispose();
+                    
+                    return elbow;
+                }
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void EnsureRegAppExists(Database db, Transaction tr, string appName)
