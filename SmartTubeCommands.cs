@@ -88,8 +88,8 @@ namespace LogiK3D.Piping
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
-            PromptEntityOptions peo = new PromptEntityOptions("\nSélectionnez la ligne à mettre à jour : ");
-            peo.SetRejectMessage("\nVeuillez sélectionner une polyligne.");
+            PromptEntityOptions peo = new PromptEntityOptions("\nSï¿½lectionnez la ligne ï¿½ mettre ï¿½ jour : ");
+            peo.SetRejectMessage("\nVeuillez sï¿½lectionner une polyligne.");
             peo.AddAllowedClass(typeof(Polyline), true);
             peo.AddAllowedClass(typeof(Polyline3d), true);
 
@@ -119,7 +119,7 @@ namespace LogiK3D.Piping
                 PipeManager.GeneratePiping(polyEnt, lineNumber, baseDN, baseOD, thickness, tr);
 
                 tr.Commit();
-                ed.WriteMessage("\nLigne $lineNumber mise à jour avec succès.");
+                ed.WriteMessage("\nLigne $lineNumber mise ï¿½ jour avec succï¿½s.");
             }
         }
 
@@ -321,10 +321,16 @@ namespace LogiK3D.Piping
                 }
                 else if (compType == "REDUCER" || compType == "RED_CONC" || compType == "RED_EXC")
                 {
-                    compLength = currentOD * 1.5;
-                    string blockName = $"REDUCER_{currentDN}_{targetDN}";
-                    blockId = generator.GetOrCreateReducer(currentOD, targetOD, compLength, blockName);
+                    compLength = Math.Max(currentOD, targetOD) * 1.5;
+                    string blockName = $"REDUCER_{Math.Max(currentOD, targetOD)}_{Math.Min(currentOD, targetOD)}";
+                    blockId = generator.GetOrCreateReducer(Math.Max(currentOD, targetOD), Math.Min(currentOD, targetOD), compLength, blockName);
                     sapCode = $"KOH-{currentDN}-{targetDN}-RED";
+
+                    if (currentOD < targetOD)
+                    {
+                        insertPt = insertPt + direction * compLength;
+                        direction = direction.Negate();
+                    }
                 }
                 else if (compType == "VANNE" || compType == "VALVE" || compType == "VALVE_GLOBE" || compType == "VALVE_BALL" || compType == "CHECK_VALVE")
                 {
@@ -519,8 +525,23 @@ namespace LogiK3D.Piping
 
                     if (compType == "REDUCER" || compType == "RED_CONC" || compType == "RED_EXC")
                     {
-                        attributes["GRAND DN"] = currentDN;
-                        attributes["PETIT DN"] = targetDN;
+                        int currentDnVal = 0, targetDnVal = 0;
+                        if (currentDN.StartsWith("DN")) int.TryParse(currentDN.Substring(2), out currentDnVal);
+                        else int.TryParse(currentDN, out currentDnVal);
+                        
+                        if (targetDN.StartsWith("DN")) int.TryParse(targetDN.Substring(2), out targetDnVal);
+                        else int.TryParse(targetDN, out targetDnVal);
+
+                        if (currentDnVal >= targetDnVal)
+                        {
+                            attributes["GRAND DN"] = currentDN;
+                            attributes["PETIT DN"] = targetDN;
+                        }
+                        else
+                        {
+                            attributes["GRAND DN"] = targetDN;
+                            attributes["PETIT DN"] = currentDN;
+                        }
                     }
 
                     BlockTableRecord btrBlock = (BlockTableRecord)tr.GetObject(blockId, OpenMode.ForRead);

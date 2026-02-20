@@ -481,8 +481,8 @@ namespace LogiK3D.Piping
             double cutback = vertexElbowRadiusLR * Math.Tan(angleRad / 2.0);
             cutbacks[i] = cutback;
 
-            // Cr�er le bloc coude
-            string blockName = "ELBOW_$Math.Round(angleDeg)_$vertexDN_$vertexElbowRadiusLR";
+            // Créer le bloc coude
+            string blockName = $"ELBOW_{Math.Round(angleDeg)}_{vertexDN}_{vertexElbowRadiusLR}";
             ObjectId elbowBlockId = generator.GetOrCreateElbow(vertexOD, vertexElbowRadiusLR, angleDeg, blockName);
 
             if (elbowBlockId != ObjectId.Null)
@@ -533,6 +533,8 @@ namespace LogiK3D.Piping
                         tr.AddNewlyCreatedDBObject(attrRef, true);
                     }
                 }
+                
+                newSolidHandles.Add(bref.Handle);
             }
         }
 
