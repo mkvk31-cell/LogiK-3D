@@ -200,6 +200,9 @@ namespace LogiK3D.Piping
                                     Point3d p2 = ports.Count > 1 ? ports[1] : bref.Position;
                                     Point3d p3 = ports.Count > 2 ? ports[2] : bref.Position;
                                     Point3d center = bref.Position;
+
+                                      if (compType.Contains("COUDE") || compType.Contains("ELBOW")) center = p3;
+                                      if (compType.Contains("TEE") || compType.Contains("TE")) center = new Point3d((p1.X + p2.X) / 2.0, (p1.Y + p2.Y) / 2.0, (p1.Z + p2.Z) / 2.0);
                                     
                                     if (compType.Contains("COUDE") || compType.Contains("ELBOW"))
                                     {
